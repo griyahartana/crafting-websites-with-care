@@ -49,13 +49,13 @@ const Chat = () => {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-[750px]">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card">
-        <Link to="/app/cari-bidan" className="w-9 h-9 grid place-items-center rounded-full hover:bg-muted">
+      <div className="safe-x flex shrink-0 items-center gap-3 border-b border-border bg-card py-3">
+        <Link to="/app/cari-bidan" className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-muted">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <img src={bidan.img} alt={bidan.name} className="w-10 h-10 rounded-full object-cover" />
+        <img src={bidan.img} alt={bidan.name} className="h-10 w-10 shrink-0 rounded-full object-cover" />
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-muted-foreground">Chat dengan Bidan</p>
           <p className="font-semibold text-sm truncate">{bidan.name}</p>
@@ -64,17 +64,17 @@ const Chat = () => {
             <span className="text-[10px] text-muted-foreground">Online</span>
           </div>
         </div>
-        <button className="w-9 h-9 grid place-items-center rounded-full hover:bg-muted" aria-label="Menu">
+        <button className="grid h-9 w-9 shrink-0 place-items-center rounded-full hover:bg-muted" aria-label="Menu">
           <MoreVertical className="w-5 h-5" />
         </button>
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gradient-soft">
+      <div ref={scrollRef} className="safe-x min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain bg-gradient-soft py-4">
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}>
             <div
-              className={`max-w-[78%] px-3.5 py-2.5 text-sm leading-relaxed shadow-card ${
+              className={`max-w-[86%] px-3.5 py-2.5 text-sm leading-relaxed shadow-card min-[380px]:max-w-[78%] ${
                 m.from === "me"
                   ? "bg-primary-soft/60 text-foreground rounded-2xl rounded-br-md"
                   : "bg-card text-foreground rounded-2xl rounded-bl-md"
@@ -88,8 +88,8 @@ const Chat = () => {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-border bg-card px-3 py-3 flex items-center gap-2">
-        <button className="w-10 h-10 grid place-items-center rounded-full hover:bg-muted shrink-0" aria-label="Lampiran">
+      <div className="safe-x flex shrink-0 items-center gap-2 border-t border-border bg-card py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+        <button className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted" aria-label="Lampiran">
           <Paperclip className="w-5 h-5 text-muted-foreground" />
         </button>
         <input
@@ -97,11 +97,11 @@ const Chat = () => {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
           placeholder="Ketik pesan..."
-          className="flex-1 h-11 px-4 rounded-full bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="h-11 min-w-0 flex-1 rounded-full bg-muted px-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         <button
           onClick={send}
-          className="w-11 h-11 grid place-items-center rounded-full bg-primary text-primary-foreground shadow-soft shrink-0 disabled:opacity-50"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-soft disabled:opacity-50"
           disabled={!text.trim()}
           aria-label="Kirim"
         >

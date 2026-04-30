@@ -10,32 +10,20 @@ const tabs = [
   { to: "/app/profil", label: "Profil", icon: User },
 ];
 
-const StatusBar = () => (
-  <div className="flex items-center justify-between px-6 pt-3 pb-1 text-xs font-semibold text-foreground/80">
-    <span>9:41</span>
-    <div className="flex items-center gap-1">
-      <span>•••</span>
-      <span>📶</span>
-      <span>🔋</span>
-    </div>
-  </div>
-);
-
 export const AppLayout = () => {
   const location = useLocation();
-  // Hide bottom nav on chat detail / fullscreen onboarding
+  // Hide bottom nav on chat detail / fullscreen onboarding.
   const hideNav = location.pathname.startsWith("/app/chat/");
 
   return (
-    <div className="min-h-screen bg-gradient-soft py-4 lg:py-8 px-2">
-      <div className="mx-auto w-full max-w-md bg-background rounded-[2.5rem] shadow-phone overflow-hidden border-8 border-foreground/5 relative min-h-[calc(100vh-2rem)] lg:min-h-[820px] lg:max-h-[900px] flex flex-col">
-        <StatusBar />
-        <main className="flex-1 overflow-y-auto pb-24">
+    <div className="app-screen bg-gradient-soft md:px-4 md:py-6">
+      <div className="app-frame mx-auto flex w-full max-w-md flex-col overflow-hidden bg-background shadow-none md:rounded-[2rem] md:border md:border-border/70 md:shadow-phone">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-smooth">
           <Outlet />
         </main>
         {!hideNav && (
-          <nav className="absolute bottom-0 left-0 right-0 bg-card/95 backdrop-blur-md border-t border-border px-2 py-2 pb-3">
-            <div className="flex items-center justify-around">
+          <nav className="bottom-nav-safe z-20 shrink-0 border-t border-border bg-card/95 px-2 pt-2 backdrop-blur-md">
+            <div className="grid grid-cols-5 gap-1">
               {tabs.map((t) => (
                 <NavLink
                   key={t.to}
@@ -43,15 +31,17 @@ export const AppLayout = () => {
                   end={t.end}
                   className={({ isActive }) =>
                     cn(
-                      "flex flex-col items-center gap-1 px-3 py-2 rounded-2xl transition-smooth min-w-0",
-                      isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                      "flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1.5 py-2 transition-smooth",
+                      isActive
+                        ? "bg-primary/10 text-primary"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     )
                   }
                 >
                   {({ isActive }) => (
                     <>
                       <t.icon className={cn("w-5 h-5", isActive && "fill-primary/10")} />
-                      <span className="text-[10px] font-semibold">{t.label}</span>
+                      <span className="max-w-full truncate text-[10px] font-semibold leading-none">{t.label}</span>
                     </>
                   )}
                 </NavLink>

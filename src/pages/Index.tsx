@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import heroIllustration from "@/assets/hero-illustration.png";
-import mockupScreens from "@/assets/mockup-screens.png";
 import { Button } from "@/components/ui/button";
 import {
   Heart,
@@ -16,6 +15,7 @@ import {
   Baby,
   Stethoscope,
   Sparkles,
+  ClipboardList,
 } from "lucide-react";
 
 const trustBadges = [
@@ -72,59 +72,78 @@ const testimonials = [
   },
 ];
 
+const appShortcuts = [
+  {
+    icon: MessageCircle,
+    title: "Chat bidan langsung",
+    desc: "Mulai konsultasi dari daftar bidan dan lanjutkan percakapan di ruang chat.",
+    to: "/app/cari-bidan",
+  },
+  {
+    icon: CalendarCheck,
+    title: "Atur kunjungan",
+    desc: "Buat dan pantau jadwal USG, ANC, atau kelas ibu hamil.",
+    to: "/app/kunjungan",
+  },
+  {
+    icon: ClipboardList,
+    title: "Pantau kehamilan",
+    desc: "Lihat usia kehamilan, pengingat, dan perkembangan si kecil.",
+    to: "/app/tracking",
+  },
+];
+
 const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* NAV */}
       <header className="sticky top-0 z-50 backdrop-blur-md bg-background/70 border-b border-border/50">
-        <nav className="container mx-auto flex items-center justify-between py-4">
+        <nav className="container mx-auto flex items-center justify-between gap-3 py-3 sm:py-4">
           <a href="#" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-primary grid place-items-center shadow-soft">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-primary shadow-soft">
               <Baby className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-display text-xl font-bold">BidanKita</span>
+            <span className="font-display text-lg font-bold sm:text-xl">BidanKita</span>
           </a>
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
             <a href="#fitur" className="hover:text-primary transition-smooth">Fitur</a>
             <a href="#cara" className="hover:text-primary transition-smooth">Cara Kerja</a>
-            <a href="#tampilan" className="hover:text-primary transition-smooth">Tampilan</a>
+            <a href="#aplikasi" className="hover:text-primary transition-smooth">Aplikasi</a>
             <a href="#testimoni" className="hover:text-primary transition-smooth">Testimoni</a>
           </div>
-          <Button asChild className="rounded-full px-6 shadow-soft"><Link to="/onboarding">Buka Aplikasi</Link></Button>
+          <Button asChild className="h-10 rounded-full px-4 text-sm shadow-soft sm:px-6"><Link to="/onboarding">Buka Aplikasi</Link></Button>
         </nav>
       </header>
 
       {/* HERO */}
       <section className="relative overflow-hidden bg-gradient-hero">
-        <div className="absolute -top-20 -right-20 w-96 h-96 rounded-full bg-secondary/40 blur-3xl" />
-        <div className="absolute -bottom-32 -left-20 w-96 h-96 rounded-full bg-accent/40 blur-3xl" />
-        <div className="container mx-auto relative grid lg:grid-cols-2 gap-12 items-center py-20 lg:py-28">
+        <div className="container mx-auto relative grid items-center gap-10 py-14 sm:py-18 lg:grid-cols-2 lg:py-28">
           <div className="animate-fade-up">
-            <div className="inline-flex items-center gap-2 bg-card/80 backdrop-blur px-4 py-2 rounded-full text-sm font-medium text-primary shadow-card mb-6">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-card/80 px-4 py-2 text-sm font-medium text-primary shadow-card backdrop-blur">
               <Sparkles className="w-4 h-4" />
-              Pendamping kehamilan #1 untuk ibu Indonesia
+              Pendamping kehamilan untuk ibu Indonesia
             </div>
-            <h1 className="text-5xl lg:text-6xl font-bold leading-[1.05] text-foreground">
+            <h1 className="text-4xl font-bold leading-[1.08] text-foreground sm:text-5xl lg:text-6xl">
               Konsultasi Bidan,
               <span className="block text-primary">teman sehat ibu & bayi.</span>
             </h1>
-            <p className="mt-6 text-lg text-muted-foreground max-w-xl leading-relaxed">
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">
               Pendamping tepercaya untuk setiap langkah kehamilan. Chat bidan,
               jadwalkan kunjungan, ikuti kelas ibu hamil, dan pantau perkembangan
               si kecil — semua dalam satu aplikasi yang menenangkan.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button asChild size="lg" className="rounded-full px-8 h-14 text-base shadow-soft">
+            <div className="mt-7 grid gap-3 sm:flex sm:flex-wrap">
+              <Button asChild size="lg" className="h-[52px] rounded-full px-7 text-base shadow-soft sm:h-14 sm:px-8">
                 <Link to="/onboarding">Mulai Sekarang <ArrowRight className="ml-1 w-4 h-4" /></Link>
               </Button>
-              <Button asChild size="lg" variant="outline" className="rounded-full px-8 h-14 text-base bg-card/60">
+              <Button asChild size="lg" variant="outline" className="h-[52px] rounded-full bg-card/60 px-7 text-base sm:h-14 sm:px-8">
                 <Link to="/app">Sudah punya akun? Masuk</Link>
               </Button>
             </div>
-            <div className="mt-10 flex flex-wrap gap-6">
+            <div className="mt-8 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:gap-6">
               {trustBadges.map((b) => (
                 <div key={b.label} className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-2xl bg-card grid place-items-center shadow-card">
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-card shadow-card">
                     <b.icon className={`w-5 h-5 ${b.color}`} />
                   </div>
                   <span className="text-sm font-semibold text-foreground">{b.label}</span>
@@ -133,27 +152,26 @@ const Index = () => {
             </div>
           </div>
           <div className="relative animate-float">
-            <div className="absolute inset-0 bg-gradient-primary opacity-20 blur-3xl rounded-full" />
             <img
               src={heroIllustration}
               alt="Ilustrasi ibu hamil bersama bidan tepercaya"
               width={1024}
               height={1024}
-              className="relative w-full max-w-lg mx-auto"
+              className="relative mx-auto w-full max-w-sm sm:max-w-md lg:max-w-lg"
             />
           </div>
         </div>
       </section>
 
       {/* FEATURES */}
-      <section id="fitur" className="py-24 bg-background">
+      <section id="fitur" className="bg-background py-16 sm:py-24">
         <div className="container mx-auto">
-          <div className="max-w-2xl mx-auto text-center mb-16">
+          <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-16">
             <p className="text-primary font-semibold mb-3">Fitur Utama</p>
-            <h2 className="text-4xl lg:text-5xl font-bold">
+            <h2 className="text-3xl font-bold sm:text-4xl lg:text-5xl">
               Semua yang ibu butuhkan, dalam genggaman.
             </h2>
-            <p className="mt-4 text-muted-foreground text-lg">
+            <p className="mt-4 text-base text-muted-foreground sm:text-lg">
               Dirancang bersama bidan untuk pengalaman yang hangat, aman, dan mudah dipakai.
             </p>
           </div>
@@ -161,9 +179,9 @@ const Index = () => {
             {features.map((f, i) => (
               <div
                 key={f.title}
-                className="group p-8 rounded-3xl bg-card shadow-card hover:shadow-soft hover:-translate-y-2 transition-smooth border border-border/50"
+                className="group rounded-3xl border border-border/50 bg-card p-6 shadow-card transition-smooth hover:-translate-y-2 hover:shadow-soft sm:p-8"
               >
-                <div className="w-14 h-14 rounded-2xl bg-secondary grid place-items-center mb-5 group-hover:bg-primary group-hover:text-primary-foreground transition-smooth">
+                <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-secondary transition-smooth group-hover:bg-primary group-hover:text-primary-foreground">
                   <f.icon className="w-7 h-7 text-secondary-foreground group-hover:text-primary-foreground transition-smooth" />
                 </div>
                 <h3 className="text-xl font-bold mb-2">{f.title}</h3>
@@ -175,17 +193,17 @@ const Index = () => {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="cara" className="py-24 bg-gradient-soft">
+      <section id="cara" className="bg-gradient-soft py-16 sm:py-24">
         <div className="container mx-auto">
-          <div className="max-w-2xl mx-auto text-center mb-16">
+          <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-16">
             <p className="text-primary font-semibold mb-3">Cara Kerja</p>
-            <h2 className="text-4xl lg:text-5xl font-bold">Tiga langkah mudah</h2>
+            <h2 className="text-3xl font-bold sm:text-4xl lg:text-5xl">Tiga langkah mudah</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-8 relative">
             {steps.map((s) => (
-              <div key={s.n} className="relative p-8 rounded-3xl bg-card shadow-card">
+              <div key={s.n} className="relative rounded-3xl bg-card p-6 shadow-card sm:p-8">
                 <div className="text-6xl font-bold font-display text-primary/20 mb-2">{s.n}</div>
-                <h3 className="text-2xl font-bold mb-3">{s.title}</h3>
+                <h3 className="mb-3 text-xl font-bold sm:text-2xl">{s.title}</h3>
                 <p className="text-muted-foreground leading-relaxed">{s.desc}</p>
               </div>
             ))}
@@ -193,37 +211,49 @@ const Index = () => {
         </div>
       </section>
 
-      {/* SCREENS */}
-      <section id="tampilan" className="py-24 bg-background">
+      {/* APP SHORTCUTS */}
+      <section id="aplikasi" className="bg-background py-16 sm:py-24">
         <div className="container mx-auto">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <p className="text-primary font-semibold mb-3">Tampilan Aplikasi</p>
-            <h2 className="text-4xl lg:text-5xl font-bold">Desain yang menenangkan</h2>
-            <p className="mt-4 text-muted-foreground text-lg">
-              Warna lembut, ilustrasi ramah, dan navigasi yang mudah untuk pengalaman nyaman di setiap tahap kehamilan.
+          <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-12">
+            <p className="text-primary font-semibold mb-3">Aplikasi Siap Dipakai</p>
+            <h2 className="text-3xl font-bold sm:text-4xl lg:text-5xl">Buka fitur, langsung jalan</h2>
+            <p className="mt-4 text-base text-muted-foreground sm:text-lg">
+              Setiap bagian sudah berupa halaman interaktif, bukan gambar pratinjau. Coba dari HP untuk merasakan alurnya.
             </p>
           </div>
-          <div className="rounded-3xl overflow-hidden shadow-phone bg-gradient-soft p-6 lg:p-10">
-            <img
-              src={mockupScreens}
-              alt="Tampilan layar aplikasi BidanKita: onboarding, beranda, daftar bidan, chat, dan tracking kesehatan"
-              loading="lazy"
-              className="w-full rounded-2xl"
-            />
+          <div className="grid gap-4 md:grid-cols-3">
+            {appShortcuts.map((item) => (
+              <Link
+                key={item.title}
+                to={item.to}
+                className="group flex min-h-48 flex-col justify-between rounded-3xl border border-border/60 bg-card p-6 shadow-card transition-smooth hover:-translate-y-1 hover:shadow-soft"
+              >
+                <div>
+                  <div className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-secondary">
+                    <item.icon className="h-6 w-6 text-secondary-foreground" />
+                  </div>
+                  <h3 className="text-lg font-bold">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.desc}</p>
+                </div>
+                <span className="mt-6 inline-flex items-center text-sm font-semibold text-primary">
+                  Buka fitur <ArrowRight className="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
 
       {/* TESTIMONIALS */}
-      <section id="testimoni" className="py-24 bg-gradient-soft">
+      <section id="testimoni" className="bg-gradient-soft py-16 sm:py-24">
         <div className="container mx-auto">
-          <div className="max-w-2xl mx-auto text-center mb-16">
+          <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-16">
             <p className="text-primary font-semibold mb-3">Cerita Mereka</p>
-            <h2 className="text-4xl lg:text-5xl font-bold">Dipercaya ribuan ibu & bidan</h2>
+            <h2 className="text-3xl font-bold sm:text-4xl lg:text-5xl">Dipercaya ribuan ibu & bidan</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {testimonials.map((t) => (
-              <div key={t.name} className="p-8 rounded-3xl bg-card shadow-card border border-border/50">
+              <div key={t.name} className="rounded-3xl border border-border/50 bg-card p-6 shadow-card sm:p-8">
                 <div className="flex gap-1 mb-4">
                   {[...Array(5)].map((_, i) => (
                     <Star key={i} className="w-4 h-4 fill-primary text-primary" />
@@ -231,7 +261,7 @@ const Index = () => {
                 </div>
                 <p className="text-foreground leading-relaxed mb-6">"{t.text}"</p>
                 <div className="flex items-center gap-3 pt-4 border-t border-border">
-                  <div className="w-11 h-11 rounded-full bg-secondary grid place-items-center">
+                  <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-secondary">
                     <Stethoscope className="w-5 h-5 text-secondary-foreground" />
                   </div>
                   <div>
@@ -246,24 +276,22 @@ const Index = () => {
       </section>
 
       {/* CTA */}
-      <section className="py-24 bg-background">
+      <section className="bg-background py-16 sm:py-24">
         <div className="container mx-auto">
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-12 lg:p-20 text-center shadow-soft">
-            <div className="absolute -top-10 -right-10 w-60 h-60 rounded-full bg-primary-soft/30 blur-2xl" />
-            <div className="absolute -bottom-10 -left-10 w-60 h-60 rounded-full bg-accent/30 blur-2xl" />
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-primary p-6 text-center shadow-soft sm:p-12 lg:p-20">
             <div className="relative max-w-2xl mx-auto">
               <Heart className="w-12 h-12 text-primary-foreground mx-auto mb-6" />
-              <h2 className="text-4xl lg:text-5xl font-bold text-primary-foreground mb-4">
+              <h2 className="mb-4 text-3xl font-bold text-primary-foreground sm:text-4xl lg:text-5xl">
                 Untuk setiap ibu, untuk setiap langkah.
               </h2>
-              <p className="text-primary-foreground/90 text-lg mb-8">
+              <p className="mb-8 text-base text-primary-foreground/90 sm:text-lg">
                 Kami di sini menemani ibu dari trimester pertama hingga si kecil lahir dengan sehat.
               </p>
-              <div className="flex flex-wrap gap-3 justify-center">
-                <Button asChild size="lg" variant="secondary" className="rounded-full px-8 h-14 text-base">
+              <div className="grid gap-3 sm:flex sm:flex-wrap sm:justify-center">
+                <Button asChild size="lg" variant="secondary" className="h-14 rounded-full px-8 text-base">
                   <Link to="/onboarding">Coba Aplikasinya</Link>
                 </Button>
-                <Button asChild size="lg" variant="outline" className="rounded-full px-8 h-14 text-base bg-transparent text-primary-foreground border-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground">
+                <Button asChild size="lg" variant="outline" className="h-14 rounded-full border-primary-foreground/40 bg-transparent px-8 text-base text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground">
                   <Link to="/app">Masuk ke Akun</Link>
                 </Button>
               </div>
@@ -276,12 +304,12 @@ const Index = () => {
       <footer className="border-t border-border py-10 bg-background">
         <div className="container mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-primary grid place-items-center">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-primary">
               <Baby className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="font-display font-bold text-foreground">BidanKita</span>
           </div>
-          <p>© 2026 BidanKita. Dibuat dengan ❤️ untuk ibu Indonesia.</p>
+          <p className="text-center md:text-right">© 2026 BidanKita. Dibuat dengan ❤️ untuk ibu Indonesia.</p>
         </div>
       </footer>
     </div>

@@ -65,6 +65,23 @@
     @apply bg-background text-foreground;
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+    overflow-x: hidden;
+  }
+
+  html,
+  #root {
+    min-height: 100%;
+  }
+
+  html {
+    overflow-x: hidden;
+  }
+
+  button,
+  a,
+  input {
+    -webkit-tap-highlight-color: transparent;
   }
 
   h1, h2, h3, h4 {
@@ -81,6 +98,29 @@
   .shadow-card { box-shadow: var(--shadow-card); }
   .shadow-phone { box-shadow: var(--shadow-phone); }
   .transition-smooth { transition: var(--transition-smooth); }
+  .safe-x { padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right)); }
+  .safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+  .app-screen {
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+  }
+  .app-frame {
+    height: 100vh;
+    height: 100svh;
+    height: 100dvh;
+  }
+  .bottom-nav-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+  }
+
+  @media (min-width: 768px) {
+    .app-frame {
+      height: calc(100vh - 3rem);
+      height: calc(100svh - 3rem);
+      height: calc(100dvh - 3rem);
+    }
+  }
 }
 
 @keyframes float {

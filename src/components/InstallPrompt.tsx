@@ -7,6 +7,14 @@ type BIPEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+type IOSNavigator = Navigator & {
+  standalone?: boolean;
+};
+
+type IOSWindow = Window & {
+  MSStream?: unknown;
+};
+
 export const InstallPrompt = () => {
   const [deferred, setDeferred] = useState<BIPEvent | null>(null);
   const [show, setShow] = useState(false);
@@ -14,10 +22,10 @@ export const InstallPrompt = () => {
 
   useEffect(() => {
     const ua = window.navigator.userAgent;
-    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as IOSWindow).MSStream;
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
+      (window.navigator as IOSNavigator).standalone === true;
     if (standalone) return;
     if (sessionStorage.getItem("bk_install_dismissed")) return;
 

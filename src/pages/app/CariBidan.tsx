@@ -15,12 +15,12 @@ const filters = ["Semua", "Terdekat", "Spesialisasi"];
 
 const CariBidan = () => {
   return (
-    <div className="px-5 pt-2 pb-4 space-y-4">
+    <div className="safe-x space-y-4 pb-5 pt-5">
       <div className="flex items-center gap-3">
-        <Link to="/app" className="w-10 h-10 grid place-items-center rounded-full hover:bg-muted">
+        <Link to="/app" className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted">
           <ArrowLeft className="w-5 h-5" />
         </Link>
-        <h1 className="font-display text-xl font-bold">Cari Bidan</h1>
+        <h1 className="font-display text-xl font-bold leading-tight">Cari Bidan</h1>
       </div>
 
       <div className="relative">
@@ -32,7 +32,7 @@ const CariBidan = () => {
         />
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1">
         {filters.map((f, i) => (
           <button
             key={f}
@@ -52,7 +52,7 @@ const CariBidan = () => {
         {bidans.map((b) => (
           <div key={b.id} className="rounded-2xl bg-card shadow-card p-3">
             <div className="flex gap-3">
-              <img src={b.img} alt={b.name} loading="lazy" className="w-20 h-20 rounded-xl object-cover" />
+              <img src={b.img} alt={b.name} loading="lazy" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm leading-snug">{b.name}</p>
                 <div className="flex items-center gap-1 mt-1">
@@ -64,12 +64,15 @@ const CariBidan = () => {
                 <p className="text-xs font-medium">{b.spec}</p>
                 <p className="text-[11px] text-muted-foreground mt-0.5">Pengalaman {b.exp}</p>
               </div>
-              <Button asChild size="sm" className="rounded-full text-xs h-8 px-4 self-end">
+              <Button asChild size="sm" className="hidden h-8 self-end rounded-full px-4 text-xs min-[380px]:inline-flex">
                 <Link to={`/app/chat/${b.id}`}>Buat Janji</Link>
               </Button>
             </div>
+            <Button asChild size="sm" className="mt-3 h-10 w-full rounded-full text-xs min-[380px]:hidden">
+              <Link to={`/app/chat/${b.id}`}>Buat Janji</Link>
+            </Button>
             <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border">
-              <MapPin className="w-3 h-3 text-muted-foreground" />
+              <MapPin className="w-3 h-3 shrink-0 text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground">{b.dist}</p>
             </div>
           </div>

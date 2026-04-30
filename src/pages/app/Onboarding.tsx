@@ -4,11 +4,11 @@ import heroIllustration from "@/assets/hero-illustration.png";
 
 const Onboarding = () => {
   return (
-    <div className="flex flex-col h-full px-6 pt-6 pb-6 bg-gradient-hero min-h-[750px]">
+    <div className="safe-x safe-bottom flex h-full min-h-full flex-col bg-gradient-hero pt-8">
       <div className="flex-1 flex flex-col items-center justify-center text-center">
-        <h1 className="font-display text-3xl font-bold text-primary">Konsultasi Bidan</h1>
+        <h1 className="font-display text-3xl font-bold leading-tight text-primary">Konsultasi Bidan</h1>
         <p className="text-muted-foreground mt-2">Teman sehat ibu &amp; bayi</p>
-        <div className="my-6 relative w-full max-w-xs animate-float">
+        <div className="relative my-6 w-full max-w-[18rem] animate-float min-[380px]:max-w-xs">
           <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full" />
           <img
             src={heroIllustration}
@@ -18,7 +18,7 @@ const Onboarding = () => {
             className="relative w-full"
           />
         </div>
-        <div className="flex gap-1.5 mb-6">
+        <div className="mb-6 flex gap-1.5">
           <span className="w-6 h-1.5 rounded-full bg-primary" />
           <span className="w-1.5 h-1.5 rounded-full bg-primary/30" />
           <span className="w-1.5 h-1.5 rounded-full bg-primary/30" />

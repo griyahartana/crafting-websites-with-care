@@ -14,29 +14,29 @@ const stats = [
 
 const Tracking = () => {
   return (
-    <div className="px-5 pt-2 pb-4 space-y-4">
+    <div className="safe-x space-y-4 pb-5 pt-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to="/app" className="w-10 h-10 grid place-items-center rounded-full hover:bg-muted">
+        <div className="flex min-w-0 items-center gap-3 pr-3">
+          <Link to="/app" className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted">
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <h1 className="font-display text-xl font-bold">Pantau Kesehatan</h1>
+          <h1 className="font-display text-xl font-bold leading-tight">Pantau Kesehatan</h1>
         </div>
-        <button className="w-10 h-10 grid place-items-center rounded-full bg-card shadow-card" aria-label="Kalender">
+        <button className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-card shadow-card" aria-label="Kalender">
           <Calendar className="w-4 h-4" />
         </button>
       </div>
 
       {/* Pregnancy progress */}
       <div className="rounded-3xl bg-gradient-to-br from-secondary to-primary-soft/40 p-5 shadow-card">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-secondary-foreground/80">Perkembangan Kehamilan</p>
             <p className="font-display text-2xl font-bold mt-1">
               24 <span className="text-sm font-semibold">minggu 3 hari</span>
             </p>
           </div>
-          <span className="text-xs px-3 py-1 rounded-full bg-card font-semibold">Trimester 2</span>
+          <span className="shrink-0 rounded-full bg-card px-3 py-1 text-xs font-semibold">Trimester 2</span>
         </div>
         <div className="mt-3 flex items-center gap-3">
           <div className="flex-1 h-2 rounded-full bg-card/60 overflow-hidden">
@@ -55,15 +55,15 @@ const Tracking = () => {
         </div>
         <div className="space-y-2">
           {appointments.map((a) => (
-            <div key={a.title} className="rounded-2xl bg-card shadow-card p-3 flex items-center gap-3">
+            <div key={a.title} className="flex items-center gap-3 rounded-2xl bg-card p-3 shadow-card">
               <div className={`w-10 h-10 rounded-xl grid place-items-center ${a.color}`}>
                 <a.icon className="w-5 h-5" />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-sm">{a.title}</p>
                 <p className="text-[11px] text-muted-foreground">{a.time}</p>
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </div>
           ))}
         </div>
@@ -75,7 +75,7 @@ const Tracking = () => {
           <h2 className="font-bold text-base">Pertumbuhan Si Kecil</h2>
           <button className="text-xs font-semibold text-primary">Lihat detail</button>
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 min-[360px]:grid-cols-3">
           {stats.map((s) => (
             <div key={s.label} className="rounded-2xl bg-card shadow-card p-3 text-center">
               <p className="text-[10px] text-muted-foreground">{s.label}</p>
