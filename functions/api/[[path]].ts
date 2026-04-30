@@ -75,6 +75,18 @@ type SendMessageBody = {
   threadId?: number;
 };
 
+type AppointmentBody = {
+  customerId?: number;
+  midwifeId?: number;
+  title?: string;
+  date?: string;
+  time?: string;
+  place?: string;
+  mode?: "Klinik" | "Online";
+  status?: "Akan datang" | "Selesai" | "Dibatalkan";
+  notes?: string;
+};
+
 const json = (data: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(data), {
     ...init,
@@ -204,6 +216,8 @@ const requireAdmin = async (request: Request, env: Env) => {
   }
   return result;
 };
+
+const isStaff = (user: SessionUser) => user.role === "admin" || user.role === "midwife";
 
 const handleRegister = async (request: Request, env: Env) => {
   const body = await readJson<RegisterBody>(request);
@@ -339,6 +353,15 @@ const handleCustomers = async (request: Request, env: Env) => {
   if ("response" in result) return result.response;
 
   const rows = await env.DB.prepare(`${customerSelect} ORDER BY created_at DESC, id DESC`).all();
+  return json({ customers: rows.results ?? [] });
+};
+
+const handleCustomerDirectory = async (request: Request, env: Env) => {
+  const result = await requireSession(request, env);
+  if ("response" in result) return result.response;
+  if (!isStaff(result.session)) return json({ error: "Hanya admin atau bidan yang bisa melihat customer" }, { status: 403 });
+
+  const rows = await env.DB.prepare(`${customerSelect} ORDER BY name ASC`).all();
   return json({ customers: rows.results ?? [] });
 };
 
@@ -632,6 +655,150 @@ const handleSendMessage = async (request: Request, env: Env) => {
   );
 };
 
+const appointmentSelect = `
+  SELECT appointments.*,
+         customers.name AS customer_name,
+         customers.avatar_url AS customer_avatar_url,
+         midwives.name AS midwife_name,
+         midwives.avatar_url AS midwife_avatar_url
+  FROM appointments
+  JOIN users customers ON customers.id = appointments.customer_id
+  JOIN users midwives ON midwives.id = appointments.midwife_id
+`;
+
+const appointmentAccessWhere = (user: SessionUser) => {
+  if (user.role === "admin") return "";
+  if (user.role === "midwife") return "WHERE appointments.midwife_id = ?";
+  return "WHERE appointments.customer_id = ?";
+};
+
+const handleAppointments = async (request: Request, env: Env) => {
+  const result = await requireSession(request, env);
+  if ("response" in result) return result.response;
+  const user = result.session;
+  const where = appointmentAccessWhere(user);
+  const statement = env.DB.prepare(`${appointmentSelect} ${where} ORDER BY appointments.date ASC, appointments.time ASC, appointments.id DESC`);
+  const rows = user.role === "admin" ? await statement.all() : await statement.bind(user.id).all();
+  return json({ appointments: rows.results ?? [] });
+};
+
+const firstMidwifeId = async (env: Env) => {
+  const row = await env.DB.prepare("SELECT id FROM users WHERE role = 'midwife' ORDER BY id LIMIT 1").first<{ id: number }>();
+  return row?.id ?? 0;
+};
+
+const resolveAppointmentActors = async (env: Env, user: SessionUser, body: AppointmentBody) => {
+  const customerId = user.role === "customer" ? user.id : Number(body.customerId ?? 0);
+  const midwifeId = user.role === "midwife" ? user.id : Number(body.midwifeId ?? 0) || (await firstMidwifeId(env));
+  return { customerId, midwifeId };
+};
+
+const validateAppointmentBody = (body: AppointmentBody) => {
+  const title = body.title?.trim();
+  const date = body.date?.trim();
+  const time = body.time?.trim();
+  const place = body.place?.trim();
+  const mode = body.mode === "Online" ? "Online" : "Klinik";
+  const status = body.status ?? "Akan datang";
+  const notes = body.notes?.trim() ?? "";
+
+  if (!title || !date || !time || !place) return { error: "Layanan, tanggal, jam, dan tempat wajib diisi" };
+  if (!["Akan datang", "Selesai", "Dibatalkan"].includes(status)) return { error: "Status janji tidak valid" };
+  return { title, date, time, place, mode, status, notes };
+};
+
+const canAccessAppointment = (user: SessionUser, appointment: { customer_id: number; midwife_id: number }) =>
+  user.role === "admin" || user.id === appointment.customer_id || user.id === appointment.midwife_id;
+
+const handleCreateAppointment = async (request: Request, env: Env) => {
+  const result = await requireSession(request, env);
+  if ("response" in result) return result.response;
+  const user = result.session;
+  const body = await readJson<AppointmentBody>(request);
+  const validated = validateAppointmentBody(body);
+  if ("error" in validated) return json({ error: validated.error }, { status: 400 });
+
+  const { customerId, midwifeId } = await resolveAppointmentActors(env, user, body);
+  if (!customerId || !midwifeId) return json({ error: "Customer dan bidan wajib dipilih" }, { status: 400 });
+  if (user.role === "customer" && body.customerId && Number(body.customerId) !== user.id) {
+    return json({ error: "Customer hanya bisa membuat janji untuk akunnya sendiri" }, { status: 403 });
+  }
+
+  const customer = await env.DB.prepare("SELECT id FROM users WHERE id = ? AND role = 'customer'").bind(customerId).first<{ id: number }>();
+  const midwife = await env.DB.prepare("SELECT id FROM users WHERE id = ? AND role = 'midwife'").bind(midwifeId).first<{ id: number }>();
+  if (!customer || !midwife) return json({ error: "Customer atau bidan tidak ditemukan" }, { status: 404 });
+
+  await env.DB.prepare(
+    `INSERT INTO appointments (customer_id, midwife_id, title, date, time, place, mode, status, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(customerId, midwifeId, validated.title, validated.date, validated.time, validated.place, validated.mode, validated.status, validated.notes)
+    .run();
+
+  const created = await env.DB.prepare(`${appointmentSelect} WHERE appointments.customer_id = ? AND appointments.midwife_id = ? ORDER BY appointments.id DESC LIMIT 1`)
+    .bind(customerId, midwifeId)
+    .first();
+  return json({ appointment: created }, { status: 201 });
+};
+
+const handleUpdateAppointment = async (request: Request, env: Env, appointmentId: number) => {
+  const result = await requireSession(request, env);
+  if ("response" in result) return result.response;
+  const user = result.session;
+  const existing = await env.DB.prepare("SELECT * FROM appointments WHERE id = ?").bind(appointmentId).first<{
+    id: number;
+    customer_id: number;
+    midwife_id: number;
+  }>();
+  if (!existing) return json({ error: "Janji kunjungan tidak ditemukan" }, { status: 404 });
+  if (!canAccessAppointment(user, existing)) return json({ error: "Tidak punya akses ke janji ini" }, { status: 403 });
+
+  const body = await readJson<AppointmentBody>(request);
+  const validated = validateAppointmentBody(body);
+  if ("error" in validated) return json({ error: validated.error }, { status: 400 });
+  const { customerId, midwifeId } = await resolveAppointmentActors(env, user, body);
+  const nextCustomerId = isStaff(user) ? customerId || existing.customer_id : existing.customer_id;
+  const nextMidwifeId = user.role === "admin" ? midwifeId || existing.midwife_id : existing.midwife_id;
+
+  await env.DB.prepare(
+    `UPDATE appointments
+     SET customer_id = ?, midwife_id = ?, title = ?, date = ?, time = ?, place = ?, mode = ?, status = ?, notes = ?, updated_at = datetime('now')
+     WHERE id = ?`,
+  )
+    .bind(
+      nextCustomerId,
+      nextMidwifeId,
+      validated.title,
+      validated.date,
+      validated.time,
+      validated.place,
+      validated.mode,
+      validated.status,
+      validated.notes,
+      appointmentId,
+    )
+    .run();
+
+  const updated = await env.DB.prepare(`${appointmentSelect} WHERE appointments.id = ?`).bind(appointmentId).first();
+  return json({ appointment: updated });
+};
+
+const handleDeleteAppointment = async (request: Request, env: Env, appointmentId: number) => {
+  const result = await requireSession(request, env);
+  if ("response" in result) return result.response;
+  const user = result.session;
+  const existing = await env.DB.prepare("SELECT * FROM appointments WHERE id = ?").bind(appointmentId).first<{
+    id: number;
+    customer_id: number;
+    midwife_id: number;
+  }>();
+  if (!existing) return json({ error: "Janji kunjungan tidak ditemukan" }, { status: 404 });
+  if (!canAccessAppointment(user, existing)) return json({ error: "Tidak punya akses ke janji ini" }, { status: 403 });
+
+  await env.DB.prepare("DELETE FROM appointments WHERE id = ?").bind(appointmentId).run();
+  return json({ ok: true });
+};
+
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders() });
 
@@ -647,6 +814,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (method === "GET" && path === "auth/me") return handleMe(request, env);
     if ((method === "PUT" || method === "PATCH") && path === "auth/profile") return handleProfileUpdate(request, env);
     if (method === "GET" && path === "midwives") return handleMidwives(env);
+    if (method === "GET" && path === "customers") return handleCustomerDirectory(request, env);
     if (method === "POST" && path === "admin/midwives") return handleCreateMidwife(request, env);
     const midwifeMatch = path.match(/^admin\/midwives\/(\d+)$/);
     if ((method === "PUT" || method === "PATCH") && midwifeMatch) {
@@ -663,6 +831,13 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (method === "GET" && path === "chat/threads") return handleThreads(request, env);
     if (method === "GET" && path === "chat/messages") return handleMessages(request, env, url);
     if (method === "POST" && path === "chat/messages") return handleSendMessage(request, env);
+    if (method === "GET" && path === "appointments") return handleAppointments(request, env);
+    if (method === "POST" && path === "appointments") return handleCreateAppointment(request, env);
+    const appointmentMatch = path.match(/^appointments\/(\d+)$/);
+    if ((method === "PUT" || method === "PATCH") && appointmentMatch) {
+      return handleUpdateAppointment(request, env, Number(appointmentMatch[1]));
+    }
+    if (method === "DELETE" && appointmentMatch) return handleDeleteAppointment(request, env, Number(appointmentMatch[1]));
 
     return json({ error: "Endpoint tidak ditemukan" }, { status: 404 });
   } catch (error) {

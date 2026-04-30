@@ -58,6 +58,25 @@ export type ChatThread = {
   updated_at: string;
 };
 
+export type Appointment = {
+  id: number;
+  customer_id: number;
+  midwife_id: number;
+  title: string;
+  date: string;
+  time: string;
+  place: string;
+  mode: "Klinik" | "Online";
+  status: "Akan datang" | "Selesai" | "Dibatalkan";
+  notes?: string;
+  customer_name: string;
+  midwife_name: string;
+  customer_avatar_url?: string | null;
+  midwife_avatar_url?: string | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 const TOKEN_KEY = "bidankita_token";
 const USER_KEY = "bidankita_user";
 const API_ORIGIN =
