@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bidanktitik",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-04-30",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bidankita-db",
+      "database_id": "10988da7-f066-4cec-ba5d-1691d682e976",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

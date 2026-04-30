@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 import { Bell, Search, MessageCircle, CalendarPlus, Users, FileHeart } from "lucide-react";
+import { useMemo } from "react";
+import { getStoredUser } from "@/lib/api";
 import article1 from "@/assets/article-1.png";
 
 const quickActions = [
@@ -10,15 +12,21 @@ const quickActions = [
 ];
 
 const Home = () => {
+  const user = useMemo(() => getStoredUser(), []);
+  const firstName = user?.name?.trim().split(/\s+/)[0] ?? "Ibu";
+  const greetingName = user?.role === "midwife" ? user.name : user?.role === "admin" ? "Admin" : firstName;
+
   return (
     <div className="safe-x space-y-5 pb-5 pt-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="min-w-0 pr-3">
           <h1 className="font-display text-2xl font-bold leading-tight">
-            Halo, Ayu <span>👋</span>
+            Halo, {greetingName} <span>👋</span>
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">Apa kabar ibu hari ini?</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {user?.role === "midwife" ? "Ada chat customer yang perlu dibalas?" : user?.role === "admin" ? "Kelola bidan dan customer hari ini." : "Apa kabar ibu hari ini?"}
+          </p>
         </div>
         <button className="relative grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-card shadow-card" aria-label="Notifikasi">
           <Bell className="w-5 h-5" />
