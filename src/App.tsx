@@ -14,6 +14,7 @@ import Chat from "./pages/app/Chat";
 import Tracking from "./pages/app/Tracking";
 import Kunjungan from "./pages/app/Kunjungan";
 import Profil from "./pages/app/Profil";
+import CatatanKehamilan from "./pages/app/CatatanKehamilan";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="chat/:id" element={<Chat />} />
             <Route path="kunjungan" element={<Kunjungan />} />
             <Route path="tracking" element={<Tracking />} />
+            <Route path="catatan" element={<CatatanKehamilan />} />
             <Route path="profil" element={<Profil />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

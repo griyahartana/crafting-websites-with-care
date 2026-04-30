@@ -6,7 +6,7 @@ const quickActions = [
   { icon: MessageCircle, title: "Chat Bidan", desc: "Tanya & konsultasi", to: "/app/cari-bidan", bg: "bg-primary/10", color: "text-primary" },
   { icon: CalendarPlus, title: "Jadwal Kunjungan", desc: "Buat janji", to: "/app/kunjungan", bg: "bg-info/10", color: "text-info" },
   { icon: Users, title: "Kelas Ibu Hamil", desc: "Belajar bersama", to: "/app/tracking", bg: "bg-secondary", color: "text-secondary-foreground" },
-  { icon: FileHeart, title: "Catatan Kehamilan", desc: "Pantau perkembangan", to: "/app/tracking", bg: "bg-accent", color: "text-accent-foreground" },
+  { icon: FileHeart, title: "Catatan Kehamilan", desc: "Tulis kondisi harian", to: "/app/catatan", bg: "bg-accent", color: "text-accent-foreground" },
 ];
 
 const Home = () => {
