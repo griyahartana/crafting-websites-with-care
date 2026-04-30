@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import heroIllustration from "@/assets/hero-illustration.png";
 import mockupScreens from "@/assets/mockup-screens.png";
 import { Button } from "@/components/ui/button";
@@ -89,7 +90,7 @@ const Index = () => {
             <a href="#tampilan" className="hover:text-primary transition-smooth">Tampilan</a>
             <a href="#testimoni" className="hover:text-primary transition-smooth">Testimoni</a>
           </div>
-          <Button className="rounded-full px-6 shadow-soft">Unduh Aplikasi</Button>
+          <Button asChild className="rounded-full px-6 shadow-soft"><Link to="/onboarding">Buka Aplikasi</Link></Button>
         </nav>
       </header>
 
@@ -113,11 +114,11 @@ const Index = () => {
               si kecil — semua dalam satu aplikasi yang menenangkan.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" className="rounded-full px-8 h-14 text-base shadow-soft">
-                Mulai Sekarang <ArrowRight className="ml-1 w-4 h-4" />
+              <Button asChild size="lg" className="rounded-full px-8 h-14 text-base shadow-soft">
+                <Link to="/onboarding">Mulai Sekarang <ArrowRight className="ml-1 w-4 h-4" /></Link>
               </Button>
-              <Button size="lg" variant="outline" className="rounded-full px-8 h-14 text-base bg-card/60">
-                Sudah punya akun? Masuk
+              <Button asChild size="lg" variant="outline" className="rounded-full px-8 h-14 text-base bg-card/60">
+                <Link to="/app">Sudah punya akun? Masuk</Link>
               </Button>
             </div>
             <div className="mt-10 flex flex-wrap gap-6">
@@ -259,11 +260,11 @@ const Index = () => {
                 Kami di sini menemani ibu dari trimester pertama hingga si kecil lahir dengan sehat.
               </p>
               <div className="flex flex-wrap gap-3 justify-center">
-                <Button size="lg" variant="secondary" className="rounded-full px-8 h-14 text-base">
-                  Unduh di App Store
+                <Button asChild size="lg" variant="secondary" className="rounded-full px-8 h-14 text-base">
+                  <Link to="/onboarding">Coba Aplikasinya</Link>
                 </Button>
-                <Button size="lg" variant="secondary" className="rounded-full px-8 h-14 text-base">
-                  Unduh di Google Play
+                <Button asChild size="lg" variant="outline" className="rounded-full px-8 h-14 text-base bg-transparent text-primary-foreground border-primary-foreground/40 hover:bg-primary-foreground/10 hover:text-primary-foreground">
+                  <Link to="/app">Masuk ke Akun</Link>
                 </Button>
               </div>
             </div>
