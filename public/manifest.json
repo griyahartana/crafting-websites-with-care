@@ -1,15 +1,15 @@
 {
-  "name": "BidanKita — Konsultasi Bidan",
-  "short_name": "BidanKita",
-  "description": "Pendamping tepercaya untuk setiap langkah kehamilan dan kesehatan ibu & bayi.",
+  "name": "LayerFarm OS - Manajemen Peternakan Ayam Petelur",
+  "short_name": "LayerFarm OS",
+  "description": "Dashboard operasional untuk kandang, produksi telur, pakan, kesehatan, keuangan, reminder, dan laporan.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#fcfbf8",
-  "theme_color": "#14B8A6",
+  "theme_color": "#079667",
   "lang": "id",
-  "categories": ["health", "medical", "lifestyle"],
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
       "src": "/icon-192.png",

@@ -1,13 +1,14 @@
 import { Link } from "react-router-dom";
-import { Bell, Search, MessageCircle, CalendarPlus, Users, FileHeart } from "lucide-react";
+import { Bell, Search, MessageCircle, CalendarPlus, Users, FileHeart, Bot } from "lucide-react";
 import { useMemo } from "react";
 import { getStoredUser } from "@/lib/api";
 import article1 from "@/assets/article-1.png";
 
 const quickActions = [
+  { icon: Bot, title: "Konsultasi AI", desc: "Tanya cepat", to: "/app/ai", bg: "bg-secondary", color: "text-secondary-foreground" },
   { icon: MessageCircle, title: "Chat Bidan", desc: "Tanya & konsultasi", to: "/app/cari-bidan", bg: "bg-primary/10", color: "text-primary" },
   { icon: CalendarPlus, title: "Jadwal Kunjungan", desc: "Buat janji", to: "/app/kunjungan", bg: "bg-info/10", color: "text-info" },
-  { icon: Users, title: "Kelas Ibu Hamil", desc: "Belajar bersama", to: "/app/tracking", bg: "bg-secondary", color: "text-secondary-foreground" },
+  { icon: Users, title: "Kelas Ibu Hamil", desc: "Belajar bersama", to: "/app/tracking", bg: "bg-primary-soft/50", color: "text-primary" },
   { icon: FileHeart, title: "Catatan Kehamilan", desc: "Tulis kondisi harian", to: "/app/catatan", bg: "bg-accent", color: "text-accent-foreground" },
 ];
 

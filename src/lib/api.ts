@@ -58,6 +58,23 @@ export type ChatThread = {
   updated_at: string;
 };
 
+export type AiThread = {
+  id: number;
+  user_id: number;
+  title: string;
+  latest_message?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AiMessage = {
+  id: number;
+  thread_id?: number;
+  role: "assistant" | "user";
+  content: string;
+  created_at?: string;
+};
+
 export type Appointment = {
   id: number;
   customer_id: number;
@@ -77,11 +94,11 @@ export type Appointment = {
   updated_at?: string;
 };
 
-const TOKEN_KEY = "bidankita_token";
-const USER_KEY = "bidankita_user";
+const TOKEN_KEY = "layerfarm_token";
+const USER_KEY = "layerfarm_user";
 const API_ORIGIN =
   typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)
-    ? "https://bidanktitik.my.id"
+    ? "https://hartanafarm.my.id"
     : "";
 
 export const getStoredToken = () => localStorage.getItem(TOKEN_KEY) ?? "";

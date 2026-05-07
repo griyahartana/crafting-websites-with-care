@@ -11,7 +11,11 @@ const fallbackBidans: Midwife[] = [
 
 const filters = ["Semua", "Terdekat", "Spesialisasi"];
 
-const CariBidan = () => {
+type CariBidanProps = {
+  compact?: boolean;
+};
+
+const CariBidan = ({ compact = false }: CariBidanProps) => {
   const [bidans, setBidans] = useState<Midwife[]>(fallbackBidans);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
@@ -32,13 +36,15 @@ const CariBidan = () => {
   }, [bidans, query]);
 
   return (
-    <div className="safe-x space-y-4 pb-5 pt-5">
-      <div className="flex items-center gap-3">
-        <Link to="/app" className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <h1 className="font-display text-xl font-bold leading-tight">Cari Bidan</h1>
-      </div>
+    <div className={compact ? "space-y-3" : "safe-x space-y-4 pb-5 pt-5"}>
+      {!compact && (
+        <div className="flex items-center gap-3">
+          <Link to="/app" className="grid h-10 w-10 shrink-0 place-items-center rounded-full hover:bg-muted">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <h1 className="font-display text-xl font-bold leading-tight">Cari Bidan</h1>
+        </div>
+      )}
 
       <div className="relative">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -53,21 +59,23 @@ const CariBidan = () => {
 
       {notice && <p className="rounded-2xl bg-secondary px-3 py-2 text-xs font-semibold text-secondary-foreground">{notice}</p>}
 
-      <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1">
-        {filters.map((f, i) => (
-          <button
-            key={f}
-            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-smooth ${
-              i === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-            }`}
-          >
-            {f}
+      {!compact && (
+        <div className="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1">
+          {filters.map((f, i) => (
+            <button
+              key={f}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-smooth ${
+                i === 0 ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+          <button className="ml-auto grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted" aria-label="Filter">
+            <SlidersHorizontal className="h-4 w-4" />
           </button>
-        ))}
-        <button className="ml-auto w-9 h-9 rounded-full bg-muted grid place-items-center shrink-0" aria-label="Filter">
-          <SlidersHorizontal className="w-4 h-4" />
-        </button>
-      </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         {filtered.map((b) => (

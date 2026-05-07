@@ -12,8 +12,8 @@ const tabs = [
 
 export const AppLayout = () => {
   const location = useLocation();
-  // Hide bottom nav on chat detail / fullscreen onboarding.
-  const hideNav = location.pathname.startsWith("/app/chat/");
+  // Hide bottom nav on chat detail and AI consultation surfaces.
+  const hideNav = location.pathname.startsWith("/app/chat/") || location.pathname.startsWith("/app/ai");
 
   return (
     <div className="app-screen bg-gradient-soft md:px-4 md:py-6">

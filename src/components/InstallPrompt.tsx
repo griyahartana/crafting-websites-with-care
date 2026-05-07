@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, X, Share } from "lucide-react";
+import { X, Share } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 type BIPEvent = Event & {
   prompt: () => Promise<void>;
@@ -27,7 +28,7 @@ export const InstallPrompt = () => {
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as IOSNavigator).standalone === true;
     if (standalone) return;
-    if (sessionStorage.getItem("bk_install_dismissed")) return;
+    if (sessionStorage.getItem("layerfarm_install_dismissed")) return;
 
     setIsIOS(ios);
 
@@ -51,7 +52,7 @@ export const InstallPrompt = () => {
 
   const dismiss = () => {
     setShow(false);
-    sessionStorage.setItem("bk_install_dismissed", "1");
+    sessionStorage.setItem("layerfarm_install_dismissed", "1");
   };
 
   const install = async () => {
@@ -65,13 +66,11 @@ export const InstallPrompt = () => {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md animate-fade-up">
+    <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md animate-fade-up md:bottom-4">
       <div className="rounded-2xl bg-card shadow-soft border border-border p-4 flex items-start gap-3">
-        <div className="w-11 h-11 rounded-xl bg-gradient-primary grid place-items-center shrink-0">
-          <Download className="w-5 h-5 text-primary-foreground" />
-        </div>
+        <BrandLogo className="h-11 w-11 rounded-xl" />
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm">Pasang BidanKita di HP</p>
+          <p className="font-semibold text-sm">Pasang LayerFarm OS di HP</p>
           {isIOS ? (
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
               Tap <Share className="inline w-3.5 h-3.5 mx-0.5" /> di Safari, lalu pilih
