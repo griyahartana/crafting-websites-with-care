@@ -4,53 +4,53 @@
 
 @layer base {
   :root {
-    --background: 60 33% 99%;
-    --foreground: 175 35% 15%;
+    --background: 44 100% 98%;
+    --foreground: 32 45% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 175 35% 15%;
+    --card-foreground: 32 45% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 175 35% 15%;
+    --popover-foreground: 32 45% 15%;
 
-    /* Brand: teal #14B8A6 */
-    --primary: 173 80% 40%;
-    --primary-foreground: 0 0% 100%;
-    --primary-soft: 152 76% 80%;
+    /* Brand: egg yolk #F59E0B */
+    --primary: 38 92% 50%;
+    --primary-foreground: 32 70% 14%;
+    --primary-soft: 48 96% 78%;
 
-    /* Mint #A7F3D0 */
-    --secondary: 152 76% 80%;
-    --secondary-foreground: 173 60% 20%;
+    /* Shell yellow */
+    --secondary: 48 96% 82%;
+    --secondary-foreground: 32 70% 24%;
 
-    /* Peach #FECACA */
-    --accent: 0 96% 89%;
-    --accent-foreground: 0 50% 30%;
+    /* Warm yolk highlight */
+    --accent: 32 95% 72%;
+    --accent-foreground: 28 75% 22%;
 
     /* Sky #2D9CDB */
     --info: 204 70% 52%;
     --info-foreground: 0 0% 100%;
 
-    --muted: 60 20% 96%;
-    --muted-foreground: 175 15% 45%;
+    --muted: 44 84% 94%;
+    --muted-foreground: 34 24% 42%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 173 30% 90%;
-    --input: 173 30% 90%;
-    --ring: 173 80% 40%;
+    --border: 42 70% 86%;
+    --input: 42 70% 86%;
+    --ring: 38 92% 50%;
 
     --radius: 1.25rem;
 
     /* Gradients */
-    --gradient-hero: linear-gradient(135deg, hsl(152 76% 92%) 0%, hsl(173 60% 95%) 50%, hsl(0 96% 95%) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(173 80% 40%), hsl(173 70% 50%));
-    --gradient-soft: linear-gradient(180deg, hsl(60 33% 99%), hsl(152 76% 96%));
+    --gradient-hero: linear-gradient(135deg, hsl(48 100% 91%) 0%, hsl(38 96% 86%) 52%, hsl(28 94% 90%) 100%);
+    --gradient-primary: linear-gradient(135deg, hsl(42 96% 56%), hsl(32 95% 48%));
+    --gradient-soft: linear-gradient(180deg, hsl(44 100% 98%), hsl(48 96% 92%));
 
     /* Shadows */
-    --shadow-soft: 0 10px 40px -15px hsl(173 80% 40% / 0.2);
-    --shadow-card: 0 4px 20px -8px hsl(173 40% 30% / 0.12);
-    --shadow-phone: 0 30px 60px -20px hsl(173 60% 25% / 0.25);
+    --shadow-soft: 0 10px 40px -15px hsl(38 92% 50% / 0.26);
+    --shadow-card: 0 4px 20px -8px hsl(35 70% 34% / 0.14);
+    --shadow-phone: 0 30px 60px -20px hsl(34 82% 28% / 0.26);
 
     --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }

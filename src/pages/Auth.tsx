@@ -1,77 +1,70 @@
-import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, LockKeyhole } from "lucide-react";
+import { FormEvent, useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Loader2, LockKeyhole } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAdminSession, storeAdminSession, validateAdminLogin } from "@/lib/adminAuth";
 
 type AuthProps = {
   mode: "login" | "register";
 };
 
-const DEMO_EMAIL = "owner@hartanafarm.test";
-const DEMO_PASSWORD = "farm12345";
-
 const Auth = ({ mode }: AuthProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isRegister = mode === "register";
-  const [farmName, setFarmName] = useState(isRegister ? "" : "Hartana Farm");
-  const [name, setName] = useState(isRegister ? "" : "Owner Hartana Farm");
-  const [email, setEmail] = useState(isRegister ? "" : DEMO_EMAIL);
-  const [password, setPassword] = useState(isRegister ? "" : DEMO_PASSWORD);
+  const [farmName, setFarmName] = useState("Hartana Farm");
+  const [name, setName] = useState("Admin Hartana Farm");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const fromPath = (location.state as { from?: string } | null)?.from || "/";
+
+  useEffect(() => {
+    if (getAdminSession()) navigate(fromPath, { replace: true });
+  }, [fromPath, navigate]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError("");
 
-    if (!email || !password || (isRegister && (!name || !farmName))) {
-      setError("Lengkapi data akun terlebih dahulu.");
+    if (!email || !password) {
+      setError("Masukkan email dan password admin.");
+      return;
+    }
+
+    if (!validateAdminLogin(email, password)) {
+      setError("Email atau password admin tidak sesuai.");
       return;
     }
 
     setLoading(true);
     window.setTimeout(() => {
-      localStorage.setItem(
-        "layerfarm_session",
-        JSON.stringify({
-          farmName: farmName || "Hartana Farm",
-          name: name || "Owner Hartana Farm",
-          email,
-          role: "owner",
-          signedInAt: new Date().toISOString(),
-        }),
-      );
+      storeAdminSession({
+        farmName: farmName || "Hartana Farm",
+        name: name || "Admin Hartana Farm",
+        email: email.trim().toLowerCase(),
+        role: "admin",
+        signedInAt: new Date().toISOString(),
+      });
       setLoading(false);
-      navigate("/app", { replace: true });
+      navigate(fromPath, { replace: true });
     }, 450);
   };
 
-  const fillDemo = () => {
-    setFarmName("Hartana Farm");
-    setName("Owner Hartana Farm");
-    setEmail(DEMO_EMAIL);
-    setPassword(DEMO_PASSWORD);
-  };
-
   return (
-    <div className="min-h-screen bg-zinc-50 px-4 py-6 text-zinc-950">
+    <div className="min-h-screen bg-yellow-50 px-4 py-6 text-zinc-950">
       <main className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-md flex-col justify-center">
-        <Link
-          to="/"
-          className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-zinc-200 bg-white shadow-sm"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-
-        <div className="rounded-[8px] border border-zinc-200 bg-white p-5 shadow-sm">
+        <div className="rounded-[8px] border border-amber-200 bg-white p-5 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <BrandLogo className="h-11 w-11" />
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">LayerFarm OS</p>
-              <h1 className="text-2xl font-bold">{isRegister ? "Buat Akun Farm" : "Masuk Dashboard"}</h1>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">LayerFarm OS</p>
+              <h1 className="text-2xl font-bold">Gateway Admin</h1>
+              <p className="mt-1 text-xs text-zinc-500">Masuk untuk membuka dashboard operasional.</p>
             </div>
           </div>
 
@@ -121,27 +114,14 @@ const Auth = ({ mode }: AuthProps) => {
 
             {error && <p className="rounded-[8px] bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{error}</p>}
 
-            <Button type="submit" className="h-11 w-full rounded-[8px] bg-emerald-600 hover:bg-emerald-700" disabled={loading}>
+            <Button type="submit" className="h-11 w-full rounded-[8px] bg-amber-500 hover:bg-amber-600" disabled={loading}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LockKeyhole className="mr-2 h-4 w-4" />}
-              {isRegister ? "Daftar dan Buka Dashboard" : "Masuk ke Dashboard"}
+              Masuk sebagai Admin
             </Button>
           </form>
 
-          {!isRegister && (
-            <button
-              type="button"
-              onClick={fillDemo}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-[8px] bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-800"
-            >
-              Pakai akun demo owner
-            </button>
-          )}
-
-          <p className="mt-5 text-center text-sm text-zinc-500">
-            {isRegister ? "Sudah punya akun farm?" : "Belum punya akun farm?"}{" "}
-            <Link className="font-semibold text-emerald-700" to={isRegister ? "/login" : "/register"}>
-              {isRegister ? "Masuk" : "Daftar SaaS"}
-            </Link>
+          <p className="mt-5 rounded-[8px] border border-amber-200 bg-yellow-50 px-3 py-2 text-xs leading-5 text-amber-900">
+            Area ini hanya untuk admin farm. Dashboard, laporan, dan data operasional akan terkunci sampai login berhasil.
           </p>
         </div>
       </main>

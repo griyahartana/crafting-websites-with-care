@@ -40,7 +40,7 @@ export const AppLayout = () => {
                 >
                   {({ isActive }) => (
                     <>
-                      <t.icon className={cn("w-5 h-5", isActive && "fill-primary/10")} />
+                      <t.icon className={cn("w-5 h-5", isActive && "fill-primary/20")} />
                       <span className="max-w-full truncate text-[10px] font-semibold leading-none">{t.label}</span>
                     </>
                   )}

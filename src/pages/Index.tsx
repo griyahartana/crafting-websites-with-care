@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -29,7 +29,9 @@ import {
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
+  LogOut,
   PackageCheck,
+  Pencil,
   Plus,
   Printer,
   ShieldCheck,
@@ -38,12 +40,24 @@ import {
   TrendingDown,
   TrendingUp,
   Truck,
+  Trash2,
   Users,
   Wallet,
   Warehouse,
   Wheat,
   type LucideIcon,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/ui/button";
@@ -60,6 +74,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { clearAdminSession } from "@/lib/adminAuth";
 import { cn } from "@/lib/utils";
 
 type Flock = {
@@ -554,9 +569,9 @@ const createFinanceForm = (): FinanceForm => ({
 });
 
 const productionChartConfig = {
-  produksi: { label: "Produksi telur", color: "#16a34a" },
-  target: { label: "Target", color: "#0ea5e9" },
-  retak: { label: "Retak", color: "#f59e0b" },
+  produksi: { label: "Produksi telur", color: "#f59e0b" },
+  target: { label: "Target", color: "#facc15" },
+  retak: { label: "Retak", color: "#fb923c" },
   abnormal: { label: "Abnormal", color: "#ef4444" },
 } satisfies ChartConfig;
 
@@ -566,11 +581,11 @@ const feedChartConfig = {
 } satisfies ChartConfig;
 
 const financeChartConfig = {
-  pendapatan: { label: "Pendapatan", color: "#16a34a" },
+  pendapatan: { label: "Pendapatan", color: "#f59e0b" },
   biaya: { label: "Biaya harian", color: "#ef4444" },
 } satisfies ChartConfig;
 
-const gradeColors = ["#16a34a", "#0ea5e9", "#f59e0b", "#ef4444"];
+const gradeColors = ["#f59e0b", "#facc15", "#fb923c", "#ef4444"];
 
 const appTabs = [
   { value: "dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -586,11 +601,11 @@ const severityClasses: Record<ReminderSeverity, string> = {
   danger: "border-red-200 bg-red-50 text-red-700",
   warning: "border-amber-200 bg-amber-50 text-amber-700",
   info: "border-sky-200 bg-sky-50 text-sky-700",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  success: "border-amber-300 bg-yellow-100 text-amber-800",
 };
 
 const metricToneClasses = {
-  green: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  green: "bg-yellow-100 text-amber-800 ring-amber-300",
   amber: "bg-amber-50 text-amber-700 ring-amber-200",
   sky: "bg-sky-50 text-sky-700 ring-sky-200",
   rose: "bg-rose-50 text-rose-700 ring-rose-200",
@@ -645,7 +660,7 @@ function MetricCard({
         </div>
       </div>
       <div className="mt-3 flex min-w-0 items-center gap-2 text-sm text-zinc-600">
-        {trend ? <TrendIcon className={cn("h-4 w-4", trend === "down" ? "text-rose-600" : "text-emerald-600")} /> : null}
+        {trend ? <TrendIcon className={cn("h-4 w-4", trend === "down" ? "text-rose-600" : "text-amber-600")} /> : null}
         <span className="min-w-0 break-words">{detail}</span>
       </div>
     </div>
@@ -708,7 +723,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
 function StatusBadge({ status }: { status: HealthStatus }) {
   const className =
     status === "Selesai"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-amber-300 bg-yellow-100 text-amber-800"
       : status === "Perlu tindakan"
         ? "border-red-200 bg-red-50 text-red-700"
         : "border-amber-200 bg-amber-50 text-amber-700";
@@ -741,6 +756,9 @@ const Index = () => {
   const [healthForm, setHealthForm] = useState<HealthForm>(() => createHealthForm(firstFlockId));
   const [financeForm, setFinanceForm] = useState<FinanceForm>(() => createFinanceForm());
   const [activeTab, setActiveTab] = useState("dashboard");
+  const flockFormRef = useRef<HTMLFormElement>(null);
+  const dailyFormRef = useRef<HTMLFormElement>(null);
+  const [editingProductionId, setEditingProductionId] = useState<string | null>(null);
 
   const today = isoDaysAgo(0);
   const last7Dates = useMemo(() => Array.from({ length: 7 }, (_, index) => isoDaysAgo(6 - index)), []);
@@ -1067,11 +1085,14 @@ const Index = () => {
     const eggCount = asNumber(dailyForm.eggCount);
     const feedUsedKg = asNumber(dailyForm.feedUsedKg);
     const deaths = asNumber(dailyForm.deaths);
+    const previousRecord = editingProductionId
+      ? productionRecords.find((record) => record.id === editingProductionId)
+      : undefined;
 
     if (!flockId || eggCount <= 0) return;
 
     const record: ProductionRecord = {
-      id: `prod-${Date.now()}`,
+      id: editingProductionId ?? `prod-${Date.now()}`,
       date: dailyForm.date,
       flockId,
       eggCount,
@@ -1083,9 +1104,13 @@ const Index = () => {
       note: dailyForm.note,
     };
 
-    setProductionRecords((current) => [record, ...current]);
+    setProductionRecords((current) =>
+      editingProductionId
+        ? current.map((item) => (item.id === editingProductionId ? record : item))
+        : [record, ...current],
+    );
 
-    if (feedUsedKg > 0) {
+    if (!editingProductionId && feedUsedKg > 0) {
       const latestFeed = latestFeedByFlock.get(flockId);
       setFeedRecords((current) => [
         {
@@ -1102,7 +1127,22 @@ const Index = () => {
       ]);
     }
 
-    if (deaths > 0) {
+    if (previousRecord) {
+      setFlocks((current) =>
+        current.map((flock) => {
+          if (previousRecord.flockId === flockId && flock.id === flockId) {
+            return { ...flock, deaths: Math.max(0, flock.deaths + deaths - previousRecord.deaths) };
+          }
+          if (previousRecord.flockId !== flockId && flock.id === previousRecord.flockId) {
+            return { ...flock, deaths: Math.max(0, flock.deaths - previousRecord.deaths) };
+          }
+          if (previousRecord.flockId !== flockId && flock.id === flockId) {
+            return { ...flock, deaths: flock.deaths + deaths };
+          }
+          return flock;
+        }),
+      );
+    } else if (deaths > 0) {
       setFlocks((current) =>
         current.map((flock) => (flock.id === flockId ? { ...flock, deaths: flock.deaths + deaths } : flock)),
       );
@@ -1113,6 +1153,47 @@ const Index = () => {
       date: current.date,
       flockId,
     }));
+    setEditingProductionId(null);
+  };
+
+  const startProductionEdit = (record: ProductionRecord) => {
+    setEditingProductionId(record.id);
+    setDailyForm({
+      date: record.date,
+      flockId: record.flockId,
+      eggCount: String(record.eggCount),
+      gradeA: String(record.gradeA),
+      gradeB: String(record.gradeB),
+      cracked: String(record.cracked),
+      abnormal: String(record.abnormal),
+      feedUsedKg: "",
+      deaths: String(record.deaths),
+      note: record.note,
+    });
+    setActiveTab("produksi");
+    window.setTimeout(() => {
+      dailyFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      dailyFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const cancelProductionEdit = () => {
+    setEditingProductionId(null);
+    setDailyForm((current) => createDailyForm(current.flockId));
+  };
+
+  const deleteProductionRecord = (record: ProductionRecord) => {
+    setProductionRecords((current) => current.filter((item) => item.id !== record.id));
+    if (record.deaths > 0) {
+      setFlocks((current) =>
+        current.map((flock) =>
+          flock.id === record.flockId ? { ...flock, deaths: Math.max(0, flock.deaths - record.deaths) } : flock,
+        ),
+      );
+    }
+    if (editingProductionId === record.id) {
+      cancelProductionEdit();
+    }
   };
 
   const handleFlockSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1274,6 +1355,27 @@ const Index = () => {
     setFinanceForm(createFinanceForm());
   };
 
+  const focusFlockForm = () => {
+    setActiveTab("kandang");
+    window.setTimeout(() => {
+      flockFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      flockFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const removeFlock = (flockId: string) => {
+    const remainingFlocks = flocks.filter((flock) => flock.id !== flockId);
+    const nextFlockId = remainingFlocks[0]?.id ?? "";
+
+    setFlocks(remainingFlocks);
+    setProductionRecords((current) => current.filter((record) => record.flockId !== flockId));
+    setFeedRecords((current) => current.filter((record) => record.flockId !== flockId));
+    setHealthRecords((current) => current.filter((record) => record.flockId !== flockId));
+    setDailyForm((current) => (current.flockId === flockId ? createDailyForm(nextFlockId) : current));
+    setFeedForm((current) => (current.flockId === flockId ? createFeedForm(nextFlockId) : current));
+    setHealthForm((current) => (current.flockId === flockId ? createHealthForm(nextFlockId) : current));
+  };
+
   const renderFlockSelect = (value: string, onValueChange: (value: string) => void) => (
     <Select value={value} onValueChange={onValueChange}>
       <SelectTrigger className="rounded-[8px] border-zinc-300 bg-white">
@@ -1289,45 +1391,59 @@ const Index = () => {
     </Select>
   );
 
+  const logoutAdmin = () => {
+    clearAdminSession();
+    window.location.assign("/login");
+  };
+
   return (
-    <div className="farm-page min-h-screen bg-zinc-50 text-zinc-950">
-      <header className="no-print sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur">
+    <div className="farm-page min-h-screen bg-yellow-50 text-zinc-950">
+      <header className="no-print sticky top-0 z-40 border-b border-amber-200 bg-amber-50/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
           <div className="flex items-center gap-3">
             <BrandLogo className="h-11 w-11" />
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">LayerFarm OS</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">LayerFarm OS</p>
               <h1 className="break-words text-lg font-bold leading-tight text-zinc-950 sm:text-2xl">
                 Manajemen Peternakan Ayam Petelur
               </h1>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              aria-label="Keluar admin"
+              className="h-10 w-10 min-w-0 overflow-hidden rounded-[8px] border-amber-300 bg-white/75 px-0 text-xs hover:bg-yellow-100 sm:w-auto sm:px-4 sm:text-sm"
+              onClick={logoutAdmin}
+            >
+              <LogOut className="h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="hidden sm:inline">Keluar</span>
+            </Button>
             <Button
               variant="outline"
               aria-label="Reset data"
-              className="h-10 w-full min-w-0 overflow-hidden rounded-[8px] border-zinc-300 px-2 text-xs sm:px-4 sm:text-sm"
+              className="h-10 w-10 min-w-0 overflow-hidden rounded-[8px] border-amber-300 bg-white/75 px-0 text-xs hover:bg-yellow-100 sm:w-auto sm:px-4 sm:text-sm"
               onClick={resetDemoData}
             >
-              <ShieldCheck className="h-4 w-4 shrink-0 min-[430px]:mr-1.5 sm:mr-2" />
-              <span className="hidden min-[430px]:inline">Reset</span>
+              <ShieldCheck className="h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
             <Button
               variant="outline"
               aria-label="Export PDF"
-              className="h-10 w-full min-w-0 overflow-hidden rounded-[8px] border-zinc-300 px-2 text-xs sm:px-4 sm:text-sm"
+              className="h-10 w-10 min-w-0 overflow-hidden rounded-[8px] border-amber-300 bg-white/75 px-0 text-xs hover:bg-yellow-100 sm:w-auto sm:px-4 sm:text-sm"
               onClick={exportPdf}
             >
-              <Printer className="h-4 w-4 shrink-0 min-[430px]:mr-1.5 sm:mr-2" />
-              <span className="hidden min-[430px]:inline">PDF</span>
+              <Printer className="h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="hidden sm:inline">PDF</span>
             </Button>
             <Button
               aria-label="Export Excel"
-              className="h-10 w-full min-w-0 overflow-hidden rounded-[8px] bg-emerald-600 px-2 text-xs hover:bg-emerald-700 sm:px-4 sm:text-sm"
+              className="h-10 w-10 min-w-0 overflow-hidden rounded-[8px] bg-amber-500 px-0 text-xs text-amber-950 hover:bg-amber-600 sm:w-auto sm:px-4 sm:text-sm"
               onClick={exportExcel}
             >
-              <FileSpreadsheet className="h-4 w-4 shrink-0 min-[430px]:mr-1.5 sm:mr-2" />
-              <span className="hidden min-[430px]:inline">Excel</span>
+              <FileSpreadsheet className="h-4 w-4 shrink-0 sm:mr-2" />
+              <span className="hidden sm:inline">Excel</span>
             </Button>
           </div>
         </div>
@@ -1337,7 +1453,7 @@ const Index = () => {
         <section className="mb-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <div>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="rounded-[6px] border-emerald-200 bg-emerald-50 text-emerald-700">
+              <Badge variant="outline" className="rounded-[6px] border-amber-300 bg-yellow-100 text-amber-800">
                 Operasional {formatDate(today)}
               </Badge>
               <Badge variant="outline" className="rounded-[6px] border-zinc-200 bg-white text-zinc-600">
@@ -1354,7 +1470,7 @@ const Index = () => {
           <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-zinc-200 bg-white p-3 text-sm shadow-sm sm:min-w-[360px]">
             <div>
               <p className="text-zinc-500">Income</p>
-              <p className="font-bold text-emerald-700">{formatCurrency(incomeTotal)}</p>
+              <p className="font-bold text-amber-800">{formatCurrency(incomeTotal)}</p>
             </div>
             <div>
               <p className="text-zinc-500">Expense</p>
@@ -1362,7 +1478,7 @@ const Index = () => {
             </div>
             <div>
               <p className="text-zinc-500">Margin</p>
-              <p className={cn("font-bold", marginTotal >= 0 ? "text-emerald-700" : "text-rose-700")}>
+              <p className={cn("font-bold", marginTotal >= 0 ? "text-amber-800" : "text-rose-700")}>
                 {formatCurrency(marginTotal)}
               </p>
             </div>
@@ -1469,7 +1585,7 @@ const Index = () => {
               <Panel title="Grading Telur Hari Ini" icon={ClipboardList}>
                 {gradeData.length > 0 ? (
                   <div className="grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center xl:grid-cols-1">
-                    <ChartContainer config={{ telur: { label: "Telur", color: "#16a34a" } }} className="mx-auto h-[190px] w-full max-w-[220px] aspect-auto">
+                    <ChartContainer config={{ telur: { label: "Telur", color: "#f59e0b" } }} className="mx-auto h-[190px] w-full max-w-[220px] aspect-auto">
                       <PieChart>
                         <Pie data={gradeData} dataKey="value" nameKey="name" innerRadius={48} outerRadius={78} paddingAngle={2}>
                           {gradeData.map((entry, index) => (
@@ -1497,12 +1613,20 @@ const Index = () => {
               </Panel>
 
               <Panel title="Pakan dan Mortalitas" icon={Activity}>
-                <ChartContainer config={feedChartConfig} className="h-[260px] w-full aspect-auto">
-                  <ComposedChart data={feedAndMortalityData} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
+                <ChartContainer config={feedChartConfig} className="h-[260px] w-full overflow-hidden aspect-auto">
+                  <ComposedChart data={feedAndMortalityData} margin={{ left: 4, right: 18, top: 12, bottom: 4 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
-                    <YAxis yAxisId="left" tickLine={false} axisLine={false} tickMargin={8} width={42} />
-                    <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} tickMargin={8} width={28} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} interval="preserveStartEnd" />
+                    <YAxis yAxisId="left" tickLine={false} axisLine={false} tickMargin={6} width={38} fontSize={12} />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={6}
+                      width={24}
+                      fontSize={12}
+                    />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Bar yAxisId="left" dataKey="pakan" fill="var(--color-pakan)" radius={[4, 4, 0, 0]} />
                     <Line yAxisId="right" type="monotone" dataKey="mortalitas" stroke="var(--color-mortalitas)" strokeWidth={2.5} />
@@ -1538,7 +1662,7 @@ const Index = () => {
                         className={cn(
                           "shrink-0 rounded-[6px] text-[11px]",
                           item.targetGap >= -3
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            ? "border-amber-300 bg-yellow-100 text-amber-800"
                             : item.targetGap >= -6
                               ? "border-amber-200 bg-amber-50 text-amber-700"
                               : "border-red-200 bg-red-50 text-red-700",
@@ -1610,7 +1734,7 @@ const Index = () => {
                             className={cn(
                               "rounded-[6px]",
                               item.targetGap >= -3
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "border-amber-300 bg-yellow-100 text-amber-800"
                                 : item.targetGap >= -6
                                   ? "border-amber-200 bg-amber-50 text-amber-700"
                                   : "border-red-200 bg-red-50 text-red-700",
@@ -1630,7 +1754,7 @@ const Index = () => {
           <TabsContent value="kandang" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[0.9fr_1.3fr]">
               <Panel title="Tambah Flock/Kandang" icon={Plus}>
-                <form onSubmit={handleFlockSubmit} className="grid gap-3 sm:grid-cols-2">
+                <form ref={flockFormRef} onSubmit={handleFlockSubmit} className="grid gap-3 sm:grid-cols-2">
                   <Field label="Nama kandang">
                     <Input className="rounded-[8px]" value={flockForm.name} onChange={(event) => setFlockForm((current) => ({ ...current, name: event.target.value }))} placeholder="Kandang D4" />
                   </Field>
@@ -1661,25 +1785,77 @@ const Index = () => {
                   <Field label="Rencana panen/afkir">
                     <Input type="date" className="rounded-[8px]" value={flockForm.plannedCullingDate} onChange={(event) => setFlockForm((current) => ({ ...current, plannedCullingDate: event.target.value }))} />
                   </Field>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700 sm:col-span-2" type="submit">
+                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
                     <Plus className="mr-2 h-4 w-4" />
                     Simpan Kandang
                   </Button>
                 </form>
               </Panel>
 
-              <Panel title="Data Kandang/Flock" icon={Warehouse}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {flockPerformance.map((item) => (
-                    <div key={item.flock.id} className="rounded-[8px] border border-zinc-200 p-4">
+              <Panel
+                title="Data Kandang/Flock"
+                icon={Warehouse}
+                action={
+                  <Button
+                    type="button"
+                    onClick={focusFlockForm}
+                    className="h-9 rounded-[8px] bg-amber-500 px-3 text-xs text-amber-950 hover:bg-amber-600 sm:text-sm"
+                  >
+                    <Plus className="h-4 w-4 sm:mr-1" />
+                    <span className="hidden sm:inline">Tambah Kandang</span>
+                    <span className="sm:hidden">Tambah</span>
+                  </Button>
+                }
+              >
+                {flockPerformance.length === 0 ? (
+                  <EmptyState
+                    title="Belum ada kandang"
+                    detail="Tambahkan kandang baru untuk mulai mencatat populasi, produksi telur, pakan, dan kesehatan."
+                  />
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {flockPerformance.map((item) => (
+                      <div key={item.flock.id} className="rounded-[8px] border border-zinc-200 p-4">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p className="font-bold text-zinc-950">{item.flock.name}</p>
                           <p className="text-sm text-zinc-500">{item.flock.strain} - {item.flock.houseType}</p>
                         </div>
-                        <Badge variant="outline" className="rounded-[6px] border-zinc-200">
-                          {item.flock.ageWeeks} minggu
-                        </Badge>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Badge variant="outline" className="rounded-[6px] border-zinc-200">
+                            {item.flock.ageWeeks} minggu
+                          </Badge>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                aria-label={`Hapus ${item.flock.name}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="max-w-sm rounded-[8px]">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus {item.flock.name}?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Data kandang ini akan dihapus dari daftar bersama riwayat produksi, pakan, dan kesehatan yang terhubung.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                  onClick={() => removeFlock(item.flock.id)}
+                                >
+                                  Hapus Kandang
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                       <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                         <div>
@@ -1707,8 +1883,9 @@ const Index = () => {
                         <Progress value={Math.min(100, item.productionRate)} className="h-2 rounded-[4px] bg-zinc-100" />
                       </div>
                     </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </Panel>
             </div>
           </TabsContent>
@@ -1716,7 +1893,12 @@ const Index = () => {
           <TabsContent value="produksi" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
               <Panel title="Input Produksi Telur Harian" icon={Egg}>
-                <form onSubmit={handleDailySubmit} className="grid gap-3 sm:grid-cols-2">
+                <form ref={dailyFormRef} onSubmit={handleDailySubmit} className="grid gap-3 sm:grid-cols-2">
+                  {editingProductionId ? (
+                    <div className="sm:col-span-2 rounded-[8px] border border-amber-200 bg-yellow-50 px-3 py-2 text-sm text-amber-900">
+                      Mode edit aktif. Ubah data lalu tekan <span className="font-semibold">Update Produksi</span>.
+                    </div>
+                  ) : null}
                   <Field label="Tanggal">
                     <Input type="date" className="rounded-[8px]" value={dailyForm.date} onChange={(event) => setDailyForm((current) => ({ ...current, date: event.target.value }))} />
                   </Field>
@@ -1749,10 +1931,22 @@ const Index = () => {
                       <Textarea className="rounded-[8px]" value={dailyForm.note} onChange={(event) => setDailyForm((current) => ({ ...current, note: event.target.value }))} placeholder="Contoh: suhu tinggi, egg belt normal, grading selesai." />
                     </Field>
                   </div>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700 sm:col-span-2" type="submit">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Simpan Produksi
-                  </Button>
+                  <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
+                    <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600" type="submit">
+                      {editingProductionId ? <Pencil className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+                      {editingProductionId ? "Update Produksi" : "Simpan Produksi"}
+                    </Button>
+                    {editingProductionId ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-[8px] border-zinc-300"
+                        onClick={cancelProductionEdit}
+                      >
+                        Batal Edit
+                      </Button>
+                    ) : null}
+                  </div>
                 </form>
               </Panel>
 
@@ -1766,12 +1960,12 @@ const Index = () => {
                           <p className="text-xs text-zinc-500">{formatDate(record.date)}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-bold text-emerald-700">{formatNumber(record.eggCount)}</p>
+                          <p className="font-bold text-amber-800">{formatNumber(record.eggCount)}</p>
                           <p className="text-xs text-zinc-500">telur</p>
                         </div>
                       </div>
                       <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
-                        <div className="rounded-[8px] bg-emerald-50 p-2 text-emerald-700">
+                        <div className="rounded-[8px] bg-yellow-100 p-2 text-amber-800">
                           <p className="font-semibold">{formatNumber(record.gradeA)}</p>
                           <p>Grade A</p>
                         </div>
@@ -1788,11 +1982,51 @@ const Index = () => {
                           <p>Abnormal</p>
                         </div>
                       </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-9 rounded-[8px] border-amber-200 text-xs text-amber-800 hover:bg-yellow-100"
+                          onClick={() => startProductionEdit(record)}
+                        >
+                          <Pencil className="mr-1.5 h-4 w-4" />
+                          Edit
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-9 rounded-[8px] border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                            >
+                              <Trash2 className="mr-1.5 h-4 w-4" />
+                              Hapus
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-sm rounded-[8px]">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Hapus riwayat produksi?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Data produksi {formatDate(record.date)} untuk {getFlockName(record.flockId)} akan dihapus dari laporan.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                onClick={() => deleteProductionRecord(record)}
+                              >
+                                Hapus
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
                     </div>
                   ))}
                 </div>
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[780px] text-left text-sm">
+                  <table className="w-full min-w-[900px] text-left text-sm">
                     <thead className="border-b border-zinc-200 text-xs uppercase tracking-[0.08em] text-zinc-500">
                       <tr>
                         <th className="py-3 pr-4">Tanggal</th>
@@ -1801,7 +2035,8 @@ const Index = () => {
                         <th className="py-3 pr-4">Grade A</th>
                         <th className="py-3 pr-4">Retak</th>
                         <th className="py-3 pr-4">Abnormal</th>
-                        <th className="py-3">Mati</th>
+                        <th className="py-3 pr-4">Mati</th>
+                        <th className="py-3 text-right">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
@@ -1813,7 +2048,51 @@ const Index = () => {
                           <td className="py-3 pr-4">{formatNumber(record.gradeA)}</td>
                           <td className="py-3 pr-4">{formatNumber(record.cracked)}</td>
                           <td className="py-3 pr-4">{formatNumber(record.abnormal)}</td>
-                          <td className="py-3">{record.deaths}</td>
+                          <td className="py-3 pr-4">{record.deaths}</td>
+                          <td className="py-3">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
+                                aria-label={`Edit produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
+                                onClick={() => startProductionEdit(record)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    aria-label={`Hapus produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="max-w-sm rounded-[8px]">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Hapus riwayat produksi?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Data produksi {formatDate(record.date)} untuk {getFlockName(record.flockId)} akan dihapus dari laporan.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                      onClick={() => deleteProductionRecord(record)}
+                                    >
+                                      Hapus
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1848,7 +2127,7 @@ const Index = () => {
                   <Field label="Harga/kg">
                     <Input type="number" min="0" className="rounded-[8px]" value={feedForm.pricePerKg} onChange={(event) => setFeedForm((current) => ({ ...current, pricePerKg: event.target.value }))} />
                   </Field>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700 sm:col-span-2" type="submit">
+                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
                     <PackageCheck className="mr-2 h-4 w-4" />
                     Simpan Pakan
                   </Button>
@@ -1864,7 +2143,7 @@ const Index = () => {
                           <p className="font-bold">{item.flock.name}</p>
                           <p className="text-sm text-zinc-500">FCR {formatDecimal(item.fcr, 2)} - konsumsi {formatNumber(item.avgFeed)} kg/hari</p>
                         </div>
-                        <Badge variant="outline" className={cn("rounded-[6px]", item.daysOfFeed < 4 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700")}>
+                        <Badge variant="outline" className={cn("rounded-[6px]", item.daysOfFeed < 4 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-amber-300 bg-yellow-100 text-amber-800")}>
                           {formatDecimal(item.daysOfFeed, 1)} hari stok
                         </Badge>
                       </div>
@@ -1931,7 +2210,7 @@ const Index = () => {
                       <Textarea className="rounded-[8px]" value={healthForm.note} onChange={(event) => setHealthForm((current) => ({ ...current, note: event.target.value }))} placeholder="Catatan gejala, tindakan, respons ayam, atau follow-up." />
                     </Field>
                   </div>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700 sm:col-span-2" type="submit">
+                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
                     <Stethoscope className="mr-2 h-4 w-4" />
                     Simpan Kesehatan
                   </Button>
@@ -2001,7 +2280,7 @@ const Index = () => {
                       <Input className="rounded-[8px]" value={financeForm.description} onChange={(event) => setFinanceForm((current) => ({ ...current, description: event.target.value }))} placeholder="Contoh: penjualan telur ke agen utama" />
                     </Field>
                   </div>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700 sm:col-span-2" type="submit">
+                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
                     <Coins className="mr-2 h-4 w-4" />
                     Simpan Transaksi
                   </Button>
@@ -2010,9 +2289,9 @@ const Index = () => {
 
               <Panel title="Margin dan Estimasi Laba Rugi" icon={Coins}>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[8px] border border-emerald-200 bg-emerald-50 p-4">
-                    <p className="text-sm text-emerald-700">Pemasukan</p>
-                    <p className="mt-1 text-xl font-bold text-emerald-800">{formatCurrency(incomeTotal)}</p>
+                  <div className="rounded-[8px] border border-amber-300 bg-yellow-100 p-4">
+                    <p className="text-sm text-amber-800">Pemasukan</p>
+                    <p className="mt-1 text-xl font-bold text-amber-900">{formatCurrency(incomeTotal)}</p>
                   </div>
                   <div className="rounded-[8px] border border-rose-200 bg-rose-50 p-4">
                     <p className="text-sm text-rose-700">Pengeluaran</p>
@@ -2020,7 +2299,7 @@ const Index = () => {
                   </div>
                   <div className="rounded-[8px] border border-zinc-200 bg-zinc-50 p-4">
                     <p className="text-sm text-zinc-600">Estimasi laba rugi</p>
-                    <p className={cn("mt-1 text-xl font-bold", marginTotal >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                    <p className={cn("mt-1 text-xl font-bold", marginTotal >= 0 ? "text-amber-800" : "text-rose-700")}>
                       {formatCurrency(marginTotal)}
                     </p>
                   </div>
@@ -2033,7 +2312,7 @@ const Index = () => {
                           <p className="font-semibold text-zinc-950">{record.category}</p>
                           <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{record.description}</p>
                         </div>
-                        <Badge variant="outline" className={cn("shrink-0 rounded-[6px]", record.type === "Pemasukan" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700")}>
+                        <Badge variant="outline" className={cn("shrink-0 rounded-[6px]", record.type === "Pemasukan" ? "border-amber-300 bg-yellow-100 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700")}>
                           {record.type}
                         </Badge>
                       </div>
@@ -2060,7 +2339,7 @@ const Index = () => {
                         <tr key={record.id}>
                           <td className="py-3 pr-4">{formatDate(record.date)}</td>
                           <td className="py-3 pr-4">
-                            <Badge variant="outline" className={cn("rounded-[6px]", record.type === "Pemasukan" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700")}>
+                            <Badge variant="outline" className={cn("rounded-[6px]", record.type === "Pemasukan" ? "border-amber-300 bg-yellow-100 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700")}>
                               {record.type}
                             </Badge>
                           </td>
@@ -2103,7 +2382,7 @@ const Index = () => {
                     </div>
                     <div className="flex justify-between gap-3 border-t border-zinc-200 pt-3">
                       <span className="text-zinc-500">Margin</span>
-                      <span className={cn("font-bold", item.summary.margin >= 0 ? "text-emerald-700" : "text-rose-700")}>
+                      <span className={cn("font-bold", item.summary.margin >= 0 ? "text-amber-800" : "text-rose-700")}>
                         {formatCurrency(item.summary.margin)}
                       </span>
                     </div>
@@ -2121,7 +2400,7 @@ const Index = () => {
                     <Printer className="mr-2 h-4 w-4" />
                     PDF
                   </Button>
-                  <Button className="rounded-[8px] bg-emerald-600 hover:bg-emerald-700" onClick={exportExcel}>
+                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600" onClick={exportExcel}>
                     <Download className="mr-2 h-4 w-4" />
                     Excel
                   </Button>
@@ -2175,17 +2454,17 @@ const Index = () => {
           </TabsContent>
         </Tabs>
       </main>
-      <nav className="no-print fixed inset-x-0 bottom-0 z-50 border-t border-zinc-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_-24px_rgba(24,24,27,0.55)] backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-7 gap-1">
+      <nav className="no-print fixed inset-x-0 bottom-0 z-50 border-t border-amber-200 bg-amber-50/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-[0_-12px_30px_-24px_rgba(24,24,27,0.55)] backdrop-blur md:hidden">
+        <div className="mx-auto grid w-full max-w-[390px] min-w-0 grid-cols-7 gap-1">
           {appTabs.map((tab) => (
             <button
               key={tab.value}
               type="button"
               onClick={() => setActiveTab(tab.value)}
               className={cn(
-                "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[8px] px-1 py-2 text-[10px] font-semibold leading-none transition-colors",
+                "flex min-w-0 flex-col items-center justify-center gap-1 rounded-[8px] px-0.5 py-2 text-[9px] font-semibold leading-none transition-colors min-[380px]:text-[10px]",
                 activeTab === tab.value
-                  ? "bg-emerald-50 text-emerald-700"
+                  ? "bg-yellow-100 text-amber-800"
                   : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900",
               )}
               aria-label={tab.label}

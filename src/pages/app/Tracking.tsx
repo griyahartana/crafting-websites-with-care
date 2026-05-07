@@ -84,7 +84,7 @@ const Tracking = () => {
                 {s.value}
                 <span className="text-[10px] font-semibold ml-0.5">{s.unit}</span>
               </p>
-              <p className="text-[10px] text-emerald-600 font-semibold">{s.note}</p>
+              <p className="text-[10px] text-amber-600 font-semibold">{s.note}</p>
             </div>
           ))}
         </div>

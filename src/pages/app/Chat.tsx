@@ -178,7 +178,7 @@ const Chat = () => {
           <p className="text-xs font-medium text-muted-foreground">{headerSubtitle}</p>
           <p className="truncate text-sm font-semibold">{partnerName}</p>
           <div className="mt-0.5 flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="h-2 w-2 rounded-full bg-yellow-1000" />
             <span className="text-[10px] text-muted-foreground">{loading ? "Memuat..." : "Realtime aktif"}</span>
           </div>
         </div>

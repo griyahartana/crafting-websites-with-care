@@ -1,11 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="72" fill="#079667"/>
+  <defs>
+    <linearGradient id="bg" x1="82" y1="64" x2="430" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <radialGradient id="egg" cx="214" cy="150" r="224" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.52" stop-color="#FFF7E6"/>
+      <stop offset="1" stop-color="#F5DFB8"/>
+    </radialGradient>
+    <linearGradient id="egg-shadow" x1="188" y1="138" x2="333" y2="379" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#D8A64B" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="84" fill="url(#bg)"/>
+  <ellipse cx="268" cy="383" rx="98" ry="24" fill="#9A5A00" opacity="0.16"/>
   <path
-    d="M256 365c-63 0-103-45-103-105 0-69 58-134 82-157 12-12 30-12 42 0 24 23 82 88 82 157 0 60-40 105-103 105Z"
+    d="M256 115c73 0 128 89 128 167 0 77-52 122-128 122s-128-45-128-122c0-78 55-167 128-167Z"
+    fill="url(#egg)"
+  />
+  <path
+    d="M256 115c73 0 128 89 128 167 0 77-52 122-128 122s-128-45-128-122c0-78 55-167 128-167Z"
+    fill="url(#egg-shadow)"
+  />
+  <path
+    d="M256 115c73 0 128 89 128 167 0 77-52 122-128 122s-128-45-128-122c0-78 55-167 128-167Z"
     fill="none"
-    stroke="#ffffff"
-    stroke-width="24"
-    stroke-linecap="round"
+    stroke="#FFF8EA"
+    stroke-width="10"
     stroke-linejoin="round"
   />
+  <ellipse cx="215" cy="198" rx="34" ry="48" fill="#FFFFFF" opacity="0.42" transform="rotate(18 215 198)"/>
 </svg>

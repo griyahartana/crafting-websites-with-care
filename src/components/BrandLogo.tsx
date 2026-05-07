@@ -6,7 +6,7 @@ type BrandLogoProps = {
 };
 
 export const BrandLogo = ({ className, imageClassName }: BrandLogoProps) => (
-  <div className={cn("shrink-0 overflow-hidden rounded-[8px] bg-[#079667]", className)}>
+  <div className={cn("shrink-0 overflow-hidden rounded-[8px] bg-[#F59E0B]", className)}>
     <img
       src="/layerfarm-logo.svg"
       alt="LayerFarm OS"
