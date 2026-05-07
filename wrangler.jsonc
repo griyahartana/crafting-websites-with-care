@@ -2,5 +2,11 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "hartanafarm",
   "pages_build_output_dir": "dist",
-  "compatibility_date": "2026-04-30"
+  "compatibility_date": "2026-04-30",
+  "kv_namespaces": [
+    {
+      "binding": "LAYERFARM_STATE",
+      "id": "eaf7817d15ff46acb7574bd5f3720714"
+    }
+  ]
 }

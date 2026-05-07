@@ -36,3 +36,12 @@ export const clearAdminSession = () => {
 
 export const validateAdminLogin = (email: string, password: string) =>
   email.trim().toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD;
+
+export const getAdminAuthHeaders = () => {
+  const session = getAdminSession();
+  if (!session) return {};
+
+  return {
+    authorization: `Basic ${btoa(`${session.email}:${ADMIN_PASSWORD}`)}`,
+  };
+};

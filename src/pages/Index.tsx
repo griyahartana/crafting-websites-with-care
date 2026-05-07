@@ -75,6 +75,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { clearAdminSession } from "@/lib/adminAuth";
+import { loadAdminFarmState, saveAdminFarmState } from "@/lib/farmSync";
 import { cn } from "@/lib/utils";
 
 type Flock = {
@@ -139,6 +140,7 @@ type FinanceRecord = {
   category: "Pakan" | "Obat" | "Tenaga kerja" | "Penjualan telur" | "Lainnya";
   description: string;
   amount: number;
+  soldEggs?: number;
 };
 
 type DailyForm = {
@@ -194,6 +196,15 @@ type FinanceForm = {
   category: FinanceRecord["category"];
   description: string;
   amount: string;
+  soldEggs: string;
+};
+
+type FarmDataSnapshot = {
+  flocks: Flock[];
+  productionRecords: ProductionRecord[];
+  feedRecords: FeedRecord[];
+  healthRecords: HealthRecord[];
+  financeRecords: FinanceRecord[];
 };
 
 type ReminderSeverity = "danger" | "warning" | "info" | "success";
@@ -279,6 +290,7 @@ const formatDecimal = (value: number, digits = 2) => (Number.isFinite(value) ? v
 
 const safeDivide = (numerator: number, denominator: number) => (denominator > 0 ? numerator / denominator : 0);
 const asNumber = (value: string) => Number(value) || 0;
+const gramsToKg = (value: string) => asNumber(value) / 1000;
 const populationOf = (flock: Flock) => Math.max(0, flock.initialPopulation - flock.deaths - flock.culled);
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -470,6 +482,7 @@ const buildInitialFinance = (): FinanceRecord[] => [
     category: "Penjualan telur",
     description: "Penjualan telur grade A dan B",
     amount: 18_950_000,
+    soldEggs: 3_720,
   },
   {
     id: "fin-2",
@@ -486,6 +499,7 @@ const buildInitialFinance = (): FinanceRecord[] => [
     category: "Penjualan telur",
     description: "Penjualan telur harian",
     amount: 18_420_000,
+    soldEggs: 3_610,
   },
   {
     id: "fin-4",
@@ -510,6 +524,7 @@ const buildInitialFinance = (): FinanceRecord[] => [
     category: "Penjualan telur",
     description: "Penjualan telur ke agen",
     amount: 17_980_000,
+    soldEggs: 3_525,
   },
 ];
 
@@ -566,6 +581,7 @@ const createFinanceForm = (): FinanceForm => ({
   category: "Penjualan telur",
   description: "",
   amount: "",
+  soldEggs: "",
 });
 
 const productionChartConfig = {
@@ -758,16 +774,116 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const flockFormRef = useRef<HTMLFormElement>(null);
   const dailyFormRef = useRef<HTMLFormElement>(null);
+  const financeFormRef = useRef<HTMLFormElement>(null);
+  const [editingFlockId, setEditingFlockId] = useState<string | null>(null);
   const [editingProductionId, setEditingProductionId] = useState<string | null>(null);
+  const [editingFinanceId, setEditingFinanceId] = useState<string | null>(null);
+  const [cloudStatus, setCloudStatus] = useState<"loading" | "saving" | "synced" | "offline">("loading");
+  const cloudReadyRef = useRef(false);
+  const cloudSaveTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const lastCloudUpdatedAtRef = useRef<string | null>(null);
+  const lastPushedSnapshotRef = useRef("");
+  const farmSnapshotRef = useRef<FarmDataSnapshot | null>(null);
 
   const today = isoDaysAgo(0);
   const last7Dates = useMemo(() => Array.from({ length: 7 }, (_, index) => isoDaysAgo(6 - index)), []);
+
+  const farmSnapshot = useMemo<FarmDataSnapshot>(
+    () => ({
+      flocks,
+      productionRecords,
+      feedRecords,
+      healthRecords,
+      financeRecords,
+    }),
+    [feedRecords, financeRecords, flocks, healthRecords, productionRecords],
+  );
+
+  const applyCloudSnapshot = useCallback((snapshot: FarmDataSnapshot) => {
+    if (Array.isArray(snapshot.flocks)) setFlocks(snapshot.flocks);
+    if (Array.isArray(snapshot.productionRecords)) setProductionRecords(snapshot.productionRecords);
+    if (Array.isArray(snapshot.feedRecords)) setFeedRecords(snapshot.feedRecords);
+    if (Array.isArray(snapshot.healthRecords)) setHealthRecords(snapshot.healthRecords);
+    if (Array.isArray(snapshot.financeRecords)) setFinanceRecords(snapshot.financeRecords);
+  }, []);
 
   useEffect(() => writeStorage(STORAGE_KEYS.flocks, flocks), [flocks]);
   useEffect(() => writeStorage(STORAGE_KEYS.production, productionRecords), [productionRecords]);
   useEffect(() => writeStorage(STORAGE_KEYS.feed, feedRecords), [feedRecords]);
   useEffect(() => writeStorage(STORAGE_KEYS.health, healthRecords), [healthRecords]);
   useEffect(() => writeStorage(STORAGE_KEYS.finance, financeRecords), [financeRecords]);
+  useEffect(() => {
+    farmSnapshotRef.current = farmSnapshot;
+  }, [farmSnapshot]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    loadAdminFarmState<FarmDataSnapshot>()
+      .then(async (remote) => {
+        if (cancelled) return;
+        if (remote.state) {
+          lastPushedSnapshotRef.current = JSON.stringify(remote.state);
+          applyCloudSnapshot(remote.state);
+        } else if (farmSnapshotRef.current) {
+          const saved = await saveAdminFarmState(farmSnapshotRef.current);
+          lastPushedSnapshotRef.current = JSON.stringify(farmSnapshotRef.current);
+          lastCloudUpdatedAtRef.current = saved.updatedAt;
+        }
+        if (remote.updatedAt) lastCloudUpdatedAtRef.current = remote.updatedAt;
+        cloudReadyRef.current = true;
+        setCloudStatus("synced");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        cloudReadyRef.current = true;
+        setCloudStatus("offline");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyCloudSnapshot]);
+
+  useEffect(() => {
+    const serialized = JSON.stringify(farmSnapshot);
+    if (!cloudReadyRef.current || serialized === lastPushedSnapshotRef.current) return;
+
+    setCloudStatus("saving");
+    if (cloudSaveTimerRef.current) window.clearTimeout(cloudSaveTimerRef.current);
+
+    cloudSaveTimerRef.current = window.setTimeout(() => {
+      saveAdminFarmState(farmSnapshot)
+        .then((remote) => {
+          lastPushedSnapshotRef.current = serialized;
+          lastCloudUpdatedAtRef.current = remote.updatedAt;
+          setCloudStatus("synced");
+        })
+        .catch(() => setCloudStatus("offline"));
+    }, 900);
+
+    return () => {
+      if (cloudSaveTimerRef.current) window.clearTimeout(cloudSaveTimerRef.current);
+    };
+  }, [farmSnapshot]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (!cloudReadyRef.current) return;
+
+      loadAdminFarmState<FarmDataSnapshot>()
+        .then((remote) => {
+          if (!remote.state || !remote.updatedAt || remote.updatedAt === lastCloudUpdatedAtRef.current) return;
+          lastPushedSnapshotRef.current = JSON.stringify(remote.state);
+          lastCloudUpdatedAtRef.current = remote.updatedAt;
+          applyCloudSnapshot(remote.state);
+          setCloudStatus("synced");
+        })
+        .catch(() => setCloudStatus("offline"));
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+  }, [applyCloudSnapshot]);
 
   const flockNameById = useMemo(
     () => new Map(flocks.map((flock) => [flock.id, flock.name])),
@@ -805,6 +921,11 @@ const Index = () => {
   const totalCulled = flocks.reduce((sum, flock) => sum + flock.culled, 0);
   const mortalityRate = safeDivide(totalDeaths + totalCulled, initialPopulation) * 100;
   const productionRateToday = safeDivide(eggToday, activePopulation) * 100;
+  const totalEggProduced = productionRecords.reduce((sum, record) => sum + record.eggCount, 0);
+  const soldEggsTotal = financeRecords
+    .filter((record) => record.type === "Pemasukan" && record.category === "Penjualan telur")
+    .reduce((sum, record) => sum + (record.soldEggs ?? 0), 0);
+  const unsoldEggStock = Math.max(0, totalEggProduced - soldEggsTotal);
   const feedStockTotal = flocks.reduce((sum, flock) => sum + (latestFeedByFlock.get(flock.id)?.stockKg ?? 0), 0);
   const feedUsedToday = feedRecords
     .filter((record) => record.date === today)
@@ -1026,9 +1147,13 @@ const Index = () => {
     const deaths = productions.reduce((sum, record) => sum + record.deaths, 0);
     const income = finances.filter((record) => record.type === "Pemasukan").reduce((sum, record) => sum + record.amount, 0);
     const expense = finances.filter((record) => record.type === "Pengeluaran").reduce((sum, record) => sum + record.amount, 0);
+    const soldEggs = finances
+      .filter((record) => record.type === "Pemasukan" && record.category === "Penjualan telur")
+      .reduce((sum, record) => sum + (record.soldEggs ?? 0), 0);
 
     return {
       eggs,
+      soldEggs,
       feedKg,
       deaths,
       income,
@@ -1049,6 +1174,9 @@ const Index = () => {
         headers: ["Metrik", "Nilai"],
         rows: [
           ["Populasi aktif", formatNumber(activePopulation)],
+          ["Total telur diproduksi", formatNumber(totalEggProduced)],
+          ["Telur terjual tercatat", formatNumber(soldEggsTotal)],
+          ["Stok telur belum terjual", formatNumber(unsoldEggStock)],
           ["Produksi telur hari ini", formatNumber(eggToday)],
           ["HD production hari ini", formatPercent(productionRateToday)],
           ["FCR 7 hari", formatDecimal(weeklyFcr, 2)],
@@ -1076,14 +1204,26 @@ const Index = () => {
         rows: reminders.map((item) => [item.title, item.detail, formatDate(item.due)]),
       },
     ],
-    [activePopulation, eggToday, feedStockTotal, flockPerformance, marginTotal, productionRateToday, reminders, weeklyFcr],
+    [
+      activePopulation,
+      eggToday,
+      feedStockTotal,
+      flockPerformance,
+      marginTotal,
+      productionRateToday,
+      reminders,
+      soldEggsTotal,
+      totalEggProduced,
+      unsoldEggStock,
+      weeklyFcr,
+    ],
   );
 
   const handleDailySubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const flockId = dailyForm.flockId;
     const eggCount = asNumber(dailyForm.eggCount);
-    const feedUsedKg = asNumber(dailyForm.feedUsedKg);
+    const feedUsedKg = gramsToKg(dailyForm.feedUsedKg);
     const deaths = asNumber(dailyForm.deaths);
     const previousRecord = editingProductionId
       ? productionRecords.find((record) => record.id === editingProductionId)
@@ -1196,12 +1336,46 @@ const Index = () => {
     }
   };
 
+  const startFinanceEdit = (record: FinanceRecord) => {
+    setEditingFinanceId(record.id);
+    setFinanceForm({
+      date: record.date,
+      type: record.type,
+      category: record.category,
+      description: record.description,
+      amount: String(record.amount),
+      soldEggs: record.soldEggs ? String(record.soldEggs) : "",
+    });
+    setActiveTab("keuangan");
+    window.setTimeout(() => {
+      financeFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      financeFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const cancelFinanceEdit = () => {
+    setEditingFinanceId(null);
+    setFinanceForm((current) => ({
+      ...createFinanceForm(),
+      date: current.date,
+      type: current.type,
+      category: current.category,
+    }));
+  };
+
+  const deleteFinanceRecord = (record: FinanceRecord) => {
+    setFinanceRecords((current) => current.filter((item) => item.id !== record.id));
+    if (editingFinanceId === record.id) {
+      cancelFinanceEdit();
+    }
+  };
+
   const handleFlockSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const initialPopulationValue = asNumber(flockForm.initialPopulation);
     if (!flockForm.name || initialPopulationValue <= 0) return;
 
-    const id = `flock-${Date.now()}`;
+    const id = editingFlockId ?? `flock-${Date.now()}`;
     const nextFlock: Flock = {
       id,
       name: flockForm.name,
@@ -1216,10 +1390,15 @@ const Index = () => {
       plannedCullingDate: flockForm.plannedCullingDate,
     };
 
-    setFlocks((current) => [...current, nextFlock]);
-    setDailyForm((current) => ({ ...current, flockId: id }));
-    setFeedForm((current) => ({ ...current, flockId: id }));
-    setHealthForm((current) => ({ ...current, flockId: id }));
+    setFlocks((current) =>
+      editingFlockId ? current.map((flock) => (flock.id === editingFlockId ? nextFlock : flock)) : [...current, nextFlock],
+    );
+    if (!editingFlockId) {
+      setDailyForm((current) => ({ ...current, flockId: id }));
+      setFeedForm((current) => ({ ...current, flockId: id }));
+      setHealthForm((current) => ({ ...current, flockId: id }));
+    }
+    setEditingFlockId(null);
     setFlockForm(createFlockForm());
   };
 
@@ -1229,7 +1408,7 @@ const Index = () => {
     if (!flockId) return;
 
     const incomingKg = asNumber(feedForm.incomingKg);
-    const usedKg = asNumber(feedForm.usedKg);
+    const usedKg = gramsToKg(feedForm.usedKg);
     const latestFeed = latestFeedByFlock.get(flockId);
     const stockKg = feedForm.stockKg
       ? asNumber(feedForm.stockKg)
@@ -1286,18 +1465,24 @@ const Index = () => {
     event.preventDefault();
     const amount = asNumber(financeForm.amount);
     if (!financeForm.description || amount <= 0) return;
+    const isEggSale = financeForm.type === "Pemasukan" && financeForm.category === "Penjualan telur";
 
-    setFinanceRecords((current) => [
-      {
-        id: `finance-${Date.now()}`,
-        date: financeForm.date,
-        type: financeForm.type,
-        category: financeForm.category,
-        description: financeForm.description,
-        amount,
-      },
-      ...current,
-    ]);
+    const nextRecord: FinanceRecord = {
+      id: editingFinanceId ?? `finance-${Date.now()}`,
+      date: financeForm.date,
+      type: financeForm.type,
+      category: financeForm.category,
+      description: financeForm.description,
+      amount,
+      soldEggs: isEggSale ? asNumber(financeForm.soldEggs) : 0,
+    };
+
+    setFinanceRecords((current) =>
+      editingFinanceId
+        ? current.map((record) => (record.id === editingFinanceId ? nextRecord : record))
+        : [nextRecord, ...current],
+    );
+    setEditingFinanceId(null);
     setFinanceForm((current) => ({ ...createFinanceForm(), date: current.date, type: current.type, category: current.category }));
   };
 
@@ -1353,14 +1538,45 @@ const Index = () => {
     setFeedForm(createFeedForm(nextFlocks[0].id));
     setHealthForm(createHealthForm(nextFlocks[0].id));
     setFinanceForm(createFinanceForm());
+    setEditingFlockId(null);
+    setEditingProductionId(null);
+    setEditingFinanceId(null);
   };
 
   const focusFlockForm = () => {
+    setEditingFlockId(null);
+    setFlockForm(createFlockForm());
     setActiveTab("kandang");
     window.setTimeout(() => {
       flockFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       flockFormRef.current?.querySelector("input")?.focus();
     }, 0);
+  };
+
+  const startFlockEdit = (flock: Flock) => {
+    setEditingFlockId(flock.id);
+    setFlockForm({
+      name: flock.name,
+      strain: flock.strain,
+      ageWeeks: String(flock.ageWeeks),
+      initialPopulation: String(flock.initialPopulation),
+      deaths: String(flock.deaths),
+      culled: String(flock.culled),
+      startedAt: flock.startedAt,
+      houseType: flock.houseType,
+      targetProduction: String(flock.targetProduction),
+      plannedCullingDate: flock.plannedCullingDate,
+    });
+    setActiveTab("kandang");
+    window.setTimeout(() => {
+      flockFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      flockFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const cancelFlockEdit = () => {
+    setEditingFlockId(null);
+    setFlockForm(createFlockForm());
   };
 
   const removeFlock = (flockId: string) => {
@@ -1374,6 +1590,9 @@ const Index = () => {
     setDailyForm((current) => (current.flockId === flockId ? createDailyForm(nextFlockId) : current));
     setFeedForm((current) => (current.flockId === flockId ? createFeedForm(nextFlockId) : current));
     setHealthForm((current) => (current.flockId === flockId ? createHealthForm(nextFlockId) : current));
+    if (editingFlockId === flockId) {
+      cancelFlockEdit();
+    }
   };
 
   const renderFlockSelect = (value: string, onValueChange: (value: string) => void) => (
@@ -1395,6 +1614,13 @@ const Index = () => {
     clearAdminSession();
     window.location.assign("/login");
   };
+
+  const cloudStatusText = {
+    loading: "Sinkron cloud",
+    saving: "Menyimpan cloud",
+    synced: "Cloud tersimpan",
+    offline: "Mode offline",
+  }[cloudStatus];
 
   return (
     <div className="farm-page min-h-screen bg-yellow-50 text-zinc-950">
@@ -1459,12 +1685,23 @@ const Index = () => {
               <Badge variant="outline" className="rounded-[6px] border-zinc-200 bg-white text-zinc-600">
                 {flocks.length} kandang aktif
               </Badge>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "rounded-[6px]",
+                  cloudStatus === "offline"
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-sky-200 bg-sky-50 text-sky-700",
+                )}
+              >
+                {cloudStatusText}
+              </Badge>
             </div>
             <h2 className="max-w-3xl text-xl font-bold tracking-normal text-zinc-950 sm:text-3xl">
               Kontrol harian produksi, pakan, kesehatan, dan keuangan.
             </h2>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-600 sm:text-base">
-              Data tersimpan di browser perangkat ini dan siap dipakai untuk monitoring pemilik, operator, atau investor.
+              Data tersimpan di cloud admin dan ikut sinkron di web maupun PWA LayerFarm.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-zinc-200 bg-white p-3 text-sm shadow-sm sm:min-w-[360px]">
@@ -1489,7 +1726,7 @@ const Index = () => {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <MetricCard
             title="Populasi aktif"
             value={formatNumber(activePopulation)}
@@ -1506,10 +1743,17 @@ const Index = () => {
             trend={productionRateToday >= 88 ? "up" : "down"}
           />
           <MetricCard
-            title="Stok pakan"
-            value={`${formatCompact(feedStockTotal)} kg`}
-            detail={`${formatNumber(feedUsedToday)} kg terpakai hari ini`}
-            icon={Wheat}
+            title="Stok telur"
+            value={formatNumber(unsoldEggStock)}
+            detail={`${formatNumber(soldEggsTotal)} telur terjual tercatat`}
+            icon={PackageCheck}
+            tone="amber"
+          />
+          <MetricCard
+                  title="Stok pakan"
+                  value={`${formatCompact(feedStockTotal)} kg`}
+                  detail={`${formatNumber(feedUsedToday * 1000)} gram terpakai hari ini`}
+                  icon={Wheat}
             tone="amber"
           />
           <MetricCard
@@ -1753,8 +1997,13 @@ const Index = () => {
 
           <TabsContent value="kandang" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[0.9fr_1.3fr]">
-              <Panel title="Tambah Flock/Kandang" icon={Plus}>
+              <Panel title={editingFlockId ? "Edit Flock/Kandang" : "Tambah Flock/Kandang"} icon={editingFlockId ? Pencil : Plus}>
                 <form ref={flockFormRef} onSubmit={handleFlockSubmit} className="grid gap-3 sm:grid-cols-2">
+                  {editingFlockId ? (
+                    <div className="rounded-[8px] border border-amber-200 bg-yellow-50 px-3 py-2 text-sm text-amber-900 sm:col-span-2">
+                      Mode edit aktif. Ubah nama atau detail kandang lalu tekan <span className="font-semibold">Update Kandang</span>.
+                    </div>
+                  ) : null}
                   <Field label="Nama kandang">
                     <Input className="rounded-[8px]" value={flockForm.name} onChange={(event) => setFlockForm((current) => ({ ...current, name: event.target.value }))} placeholder="Kandang D4" />
                   </Field>
@@ -1785,10 +2034,17 @@ const Index = () => {
                   <Field label="Rencana panen/afkir">
                     <Input type="date" className="rounded-[8px]" value={flockForm.plannedCullingDate} onChange={(event) => setFlockForm((current) => ({ ...current, plannedCullingDate: event.target.value }))} />
                   </Field>
-                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Simpan Kandang
-                  </Button>
+                  <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
+                    <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600" type="submit">
+                      {editingFlockId ? <Pencil className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+                      {editingFlockId ? "Update Kandang" : "Simpan Kandang"}
+                    </Button>
+                    {editingFlockId ? (
+                      <Button type="button" variant="outline" className="rounded-[8px] border-zinc-300" onClick={cancelFlockEdit}>
+                        Batal Edit
+                      </Button>
+                    ) : null}
+                  </div>
                 </form>
               </Panel>
 
@@ -1825,6 +2081,16 @@ const Index = () => {
                           <Badge variant="outline" className="rounded-[6px] border-zinc-200">
                             {item.flock.ageWeeks} minggu
                           </Badge>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
+                            onClick={() => startFlockEdit(item.flock)}
+                            aria-label={`Edit ${item.flock.name}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
@@ -1920,8 +2186,8 @@ const Index = () => {
                   <Field label="Telur abnormal">
                     <Input type="number" min="0" className="rounded-[8px]" value={dailyForm.abnormal} onChange={(event) => setDailyForm((current) => ({ ...current, abnormal: event.target.value }))} />
                   </Field>
-                  <Field label="Pakan terpakai (kg)">
-                    <Input type="number" min="0" className="rounded-[8px]" value={dailyForm.feedUsedKg} onChange={(event) => setDailyForm((current) => ({ ...current, feedUsedKg: event.target.value }))} />
+                  <Field label="Pakan terpakai (gram)">
+                    <Input type="number" min="0" step="1" className="rounded-[8px]" value={dailyForm.feedUsedKg} onChange={(event) => setDailyForm((current) => ({ ...current, feedUsedKg: event.target.value }))} placeholder="Contoh: 3300" />
                   </Field>
                   <Field label="Ayam mati hari ini">
                     <Input type="number" min="0" className="rounded-[8px]" value={dailyForm.deaths} onChange={(event) => setDailyForm((current) => ({ ...current, deaths: event.target.value }))} />
@@ -1951,20 +2217,62 @@ const Index = () => {
               </Panel>
 
               <Panel title="Riwayat Produksi dan Produktivitas" icon={ClipboardList}>
-                <div className="grid gap-3 md:hidden">
-                  {productionRecords.slice(0, 8).map((record) => (
-                    <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
+                <div className="grid gap-3">
+                  {productionRecords.slice(0, 14).map((record) => (
+                    <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm sm:p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <p className="font-semibold text-zinc-950">{getFlockName(record.flockId)}</p>
                           <p className="text-xs text-zinc-500">{formatDate(record.date)}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-amber-800">{formatNumber(record.eggCount)}</p>
-                          <p className="text-xs text-zinc-500">telur</p>
+                        <div className="flex items-center gap-2">
+                          <div className="rounded-[8px] bg-yellow-100 px-3 py-1.5 text-right text-amber-900">
+                            <p className="text-base font-bold leading-none">{formatNumber(record.eggCount)}</p>
+                            <p className="mt-0.5 text-[11px] text-amber-700">telur</p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
+                            aria-label={`Edit produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
+                            onClick={() => startProductionEdit(record)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                aria-label={`Hapus produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="max-w-sm rounded-[8px]">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus riwayat produksi?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Data produksi {formatDate(record.date)} untuk {getFlockName(record.flockId)} akan dihapus dari laporan.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                  onClick={() => deleteProductionRecord(record)}
+                                >
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </div>
-                      <div className="mt-3 grid grid-cols-4 gap-2 text-center text-xs">
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-5">
                         <div className="rounded-[8px] bg-yellow-100 p-2 text-amber-800">
                           <p className="font-semibold">{formatNumber(record.gradeA)}</p>
                           <p>Grade A</p>
@@ -1981,122 +2289,13 @@ const Index = () => {
                           <p className="font-semibold">{formatNumber(record.abnormal)}</p>
                           <p>Abnormal</p>
                         </div>
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-9 rounded-[8px] border-amber-200 text-xs text-amber-800 hover:bg-yellow-100"
-                          onClick={() => startProductionEdit(record)}
-                        >
-                          <Pencil className="mr-1.5 h-4 w-4" />
-                          Edit
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="h-9 rounded-[8px] border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                            >
-                              <Trash2 className="mr-1.5 h-4 w-4" />
-                              Hapus
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="max-w-sm rounded-[8px]">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Hapus riwayat produksi?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Data produksi {formatDate(record.date)} untuk {getFlockName(record.flockId)} akan dihapus dari laporan.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
-                                onClick={() => deleteProductionRecord(record)}
-                              >
-                                Hapus
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <div className="rounded-[8px] bg-zinc-50 p-2 text-zinc-700">
+                          <p className="font-semibold">{formatNumber(record.deaths)}</p>
+                          <p>Mati</p>
+                        </div>
                       </div>
                     </div>
                   ))}
-                </div>
-                <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[900px] text-left text-sm">
-                    <thead className="border-b border-zinc-200 text-xs uppercase tracking-[0.08em] text-zinc-500">
-                      <tr>
-                        <th className="py-3 pr-4">Tanggal</th>
-                        <th className="py-3 pr-4">Kandang</th>
-                        <th className="py-3 pr-4">Telur</th>
-                        <th className="py-3 pr-4">Grade A</th>
-                        <th className="py-3 pr-4">Retak</th>
-                        <th className="py-3 pr-4">Abnormal</th>
-                        <th className="py-3 pr-4">Mati</th>
-                        <th className="py-3 text-right">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      {productionRecords.slice(0, 14).map((record) => (
-                        <tr key={record.id}>
-                          <td className="py-3 pr-4">{formatDate(record.date)}</td>
-                          <td className="py-3 pr-4 font-semibold">{getFlockName(record.flockId)}</td>
-                          <td className="py-3 pr-4">{formatNumber(record.eggCount)}</td>
-                          <td className="py-3 pr-4">{formatNumber(record.gradeA)}</td>
-                          <td className="py-3 pr-4">{formatNumber(record.cracked)}</td>
-                          <td className="py-3 pr-4">{formatNumber(record.abnormal)}</td>
-                          <td className="py-3 pr-4">{record.deaths}</td>
-                          <td className="py-3">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
-                                aria-label={`Edit produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
-                                onClick={() => startProductionEdit(record)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                    aria-label={`Hapus produksi ${formatDate(record.date)} ${getFlockName(record.flockId)}`}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent className="max-w-sm rounded-[8px]">
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Hapus riwayat produksi?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Data produksi {formatDate(record.date)} untuk {getFlockName(record.flockId)} akan dihapus dari laporan.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
-                                      onClick={() => deleteProductionRecord(record)}
-                                    >
-                                      Hapus
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </Panel>
             </div>
@@ -2118,8 +2317,8 @@ const Index = () => {
                   <Field label="Pakan masuk (kg)">
                     <Input type="number" min="0" className="rounded-[8px]" value={feedForm.incomingKg} onChange={(event) => setFeedForm((current) => ({ ...current, incomingKg: event.target.value }))} />
                   </Field>
-                  <Field label="Pakan terpakai (kg)">
-                    <Input type="number" min="0" className="rounded-[8px]" value={feedForm.usedKg} onChange={(event) => setFeedForm((current) => ({ ...current, usedKg: event.target.value }))} />
+                  <Field label="Pakan terpakai (gram)">
+                    <Input type="number" min="0" step="1" className="rounded-[8px]" value={feedForm.usedKg} onChange={(event) => setFeedForm((current) => ({ ...current, usedKg: event.target.value }))} placeholder="Contoh: 3300" />
                   </Field>
                   <Field label="Stok akhir (kg)">
                     <Input type="number" min="0" className="rounded-[8px]" value={feedForm.stockKg} onChange={(event) => setFeedForm((current) => ({ ...current, stockKg: event.target.value }))} placeholder="Otomatis bila kosong" />
@@ -2243,7 +2442,12 @@ const Index = () => {
           <TabsContent value="keuangan" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
               <Panel title="Input Keuangan Sederhana" icon={Wallet}>
-                <form onSubmit={handleFinanceSubmit} className="grid gap-3 sm:grid-cols-2">
+                <form ref={financeFormRef} onSubmit={handleFinanceSubmit} className="grid gap-3 sm:grid-cols-2">
+                  {editingFinanceId ? (
+                    <div className="rounded-[8px] border border-amber-200 bg-yellow-50 px-3 py-2 text-sm text-amber-900 sm:col-span-2">
+                      Mode edit aktif. Ubah transaksi lalu tekan <span className="font-semibold">Update Transaksi</span>.
+                    </div>
+                  ) : null}
                   <Field label="Tanggal">
                     <Input type="date" className="rounded-[8px]" value={financeForm.date} onChange={(event) => setFinanceForm((current) => ({ ...current, date: event.target.value }))} />
                   </Field>
@@ -2275,15 +2479,34 @@ const Index = () => {
                   <Field label="Nominal">
                     <Input type="number" min="0" className="rounded-[8px]" value={financeForm.amount} onChange={(event) => setFinanceForm((current) => ({ ...current, amount: event.target.value }))} />
                   </Field>
+                  {financeForm.type === "Pemasukan" && financeForm.category === "Penjualan telur" ? (
+                    <Field label="Jumlah telur terjual">
+                      <Input
+                        type="number"
+                        min="0"
+                        className="rounded-[8px]"
+                        value={financeForm.soldEggs}
+                        onChange={(event) => setFinanceForm((current) => ({ ...current, soldEggs: event.target.value }))}
+                        placeholder="Contoh: 1200"
+                      />
+                    </Field>
+                  ) : null}
                   <div className="sm:col-span-2">
                     <Field label="Deskripsi">
                       <Input className="rounded-[8px]" value={financeForm.description} onChange={(event) => setFinanceForm((current) => ({ ...current, description: event.target.value }))} placeholder="Contoh: penjualan telur ke agen utama" />
                     </Field>
                   </div>
-                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
-                    <Coins className="mr-2 h-4 w-4" />
-                    Simpan Transaksi
-                  </Button>
+                  <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
+                    <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600" type="submit">
+                      {editingFinanceId ? <Pencil className="mr-2 h-4 w-4" /> : <Coins className="mr-2 h-4 w-4" />}
+                      {editingFinanceId ? "Update Transaksi" : "Simpan Transaksi"}
+                    </Button>
+                    {editingFinanceId ? (
+                      <Button type="button" variant="outline" className="rounded-[8px] border-zinc-300" onClick={cancelFinanceEdit}>
+                        Batal Edit
+                      </Button>
+                    ) : null}
+                  </div>
                 </form>
               </Panel>
 
@@ -2304,52 +2527,74 @@ const Index = () => {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3 md:hidden">
-                  {financeRecords.slice(0, 8).map((record) => (
-                    <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm">
-                      <div className="flex items-start justify-between gap-3">
+                <div className="mt-4 grid gap-3">
+                  {financeRecords.map((record) => (
+                    <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm sm:p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-semibold text-zinc-950">{record.category}</p>
-                          <p className="mt-1 line-clamp-2 text-xs text-zinc-500">{record.description}</p>
+                          <p className="mt-1 break-words text-xs text-zinc-500 sm:text-sm">{record.description}</p>
+                          <p className="mt-2 text-xs text-zinc-500">{formatDate(record.date)}</p>
+                          {record.type === "Pemasukan" && record.category === "Penjualan telur" ? (
+                            <p className="mt-1 text-xs font-semibold text-amber-800">
+                              {formatNumber(record.soldEggs ?? 0)} telur terjual
+                            </p>
+                          ) : null}
                         </div>
-                        <Badge variant="outline" className={cn("shrink-0 rounded-[6px]", record.type === "Pemasukan" ? "border-amber-300 bg-yellow-100 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700")}>
-                          {record.type}
-                        </Badge>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Badge variant="outline" className={cn("rounded-[6px]", record.type === "Pemasukan" ? "border-amber-300 bg-yellow-100 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700")}>
+                            {record.type}
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
+                            onClick={() => startFinanceEdit(record)}
+                            aria-label={`Edit transaksi ${record.category}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-9 w-9 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                aria-label={`Hapus transaksi ${record.category}`}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="max-w-sm rounded-[8px]">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Hapus transaksi keuangan?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Transaksi {record.type.toLowerCase()} {formatCurrency(record.amount)} untuk {record.category} akan dihapus dari laporan.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                  onClick={() => deleteFinanceRecord(record)}
+                                >
+                                  Hapus
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
-                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-zinc-100 pt-3">
-                        <span className="text-xs text-zinc-500">{formatDate(record.date)}</span>
-                        <span className="font-bold text-zinc-950">{formatCurrency(record.amount)}</span>
+                      <div className="mt-3 rounded-[8px] bg-zinc-50 px-3 py-2 text-right">
+                        <p className="text-xs text-zinc-500">Nominal</p>
+                        <p className={cn("text-lg font-bold", record.type === "Pemasukan" ? "text-amber-800" : "text-rose-700")}>
+                          {formatCurrency(record.amount)}
+                        </p>
                       </div>
                     </div>
                   ))}
-                </div>
-                <div className="mt-4 hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="border-b border-zinc-200 text-xs uppercase tracking-[0.08em] text-zinc-500">
-                      <tr>
-                        <th className="py-3 pr-4">Tanggal</th>
-                        <th className="py-3 pr-4">Tipe</th>
-                        <th className="py-3 pr-4">Kategori</th>
-                        <th className="py-3 pr-4">Deskripsi</th>
-                        <th className="py-3 text-right">Nominal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                      {financeRecords.map((record) => (
-                        <tr key={record.id}>
-                          <td className="py-3 pr-4">{formatDate(record.date)}</td>
-                          <td className="py-3 pr-4">
-                            <Badge variant="outline" className={cn("rounded-[6px]", record.type === "Pemasukan" ? "border-amber-300 bg-yellow-100 text-amber-800" : "border-rose-200 bg-rose-50 text-rose-700")}>
-                              {record.type}
-                            </Badge>
-                          </td>
-                          <td className="py-3 pr-4">{record.category}</td>
-                          <td className="py-3 pr-4 text-zinc-600">{record.description}</td>
-                          <td className="py-3 text-right font-semibold">{formatCurrency(record.amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
                 </div>
               </Panel>
             </div>
@@ -2367,6 +2612,10 @@ const Index = () => {
                     <div className="flex justify-between gap-3">
                       <span className="text-zinc-500">Produksi telur</span>
                       <span className="font-semibold">{formatNumber(item.summary.eggs)}</span>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-zinc-500">Telur terjual</span>
+                      <span className="font-semibold">{formatNumber(item.summary.soldEggs)}</span>
                     </div>
                     <div className="flex justify-between gap-3">
                       <span className="text-zinc-500">Pakan terpakai</span>
