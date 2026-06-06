@@ -21,7 +21,10 @@ import {
   BarChart3,
   Bell,
   CalendarClock,
+  CalendarDays,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   Coins,
   Download,
@@ -255,6 +258,11 @@ const shortDateFormatter = new Intl.DateTimeFormat("id-ID", {
   month: "short",
 });
 
+const monthFormatter = new Intl.DateTimeFormat("id-ID", {
+  month: "long",
+  year: "numeric",
+});
+
 const toInputDate = (date: Date) => {
   const adjusted = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return adjusted.toISOString().slice(0, 10);
@@ -273,6 +281,22 @@ const isoDaysFrom = (days: number) => {
 };
 
 const parseDate = (isoDate: string) => new Date(`${isoDate}T00:00:00`);
+
+const monthKeyOf = (isoDate: string) => isoDate.slice(0, 7);
+
+const lastDayOfMonth = (monthKey: string) => {
+  const [year, month] = monthKey.split("-").map(Number);
+  return toInputDate(new Date(year, month, 0));
+};
+
+const dashboardEndDateForMonth = (monthKey: string, todayIso: string) =>
+  monthKey >= monthKeyOf(todayIso) ? todayIso : lastDayOfMonth(monthKey);
+
+const shiftMonthKey = (monthKey: string, offset: number) => {
+  const [year, month] = monthKey.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + offset, 1);
+  return toInputDate(shifted).slice(0, 7);
+};
 
 const buildDateRange = (startIso: string, endIso: string) => {
   const start = parseDate(startIso);
@@ -303,6 +327,7 @@ const diffDays = (targetIso: string, baseIso: string) => {
 
 const formatDate = (isoDate: string) => dateFormatter.format(parseDate(isoDate));
 const formatShortDate = (isoDate: string) => shortDateFormatter.format(parseDate(isoDate));
+const formatMonth = (monthKey: string) => monthFormatter.format(parseDate(`${monthKey}-01`));
 const formatDayTick = (value: string | number) => String(value).slice(0, 2);
 const formatNumber = (value: number) => numberFormatter.format(Math.round(value));
 const formatCompact = (value: number) => compactFormatter.format(value);
@@ -906,12 +931,35 @@ const Index = () => {
   const today = isoDaysAgo(0);
   const last7Dates = useMemo(() => Array.from({ length: 7 }, (_, index) => isoDaysAgo(6 - index)), []);
   const dashboardEndDate = dashboardDate || today;
+  const currentMonthKey = monthKeyOf(today);
+  const dashboardMonthKey = monthKeyOf(dashboardEndDate);
   const dashboardDates = useMemo(
     () => buildDateRange(firstDayOfMonth(dashboardEndDate), dashboardEndDate),
     [dashboardEndDate],
   );
   const dashboardRangeLabel = `${formatShortDate(dashboardDates[0])} - ${formatShortDate(dashboardEndDate)}`;
   const dashboardDateLabel = dashboardEndDate === today ? "hari ini" : formatShortDate(dashboardEndDate);
+  const dashboardMonthLabel = formatMonth(dashboardMonthKey);
+  const previousMonthLabel = formatMonth(shiftMonthKey(currentMonthKey, -1));
+  const canGoToNextDashboardMonth = dashboardMonthKey < currentMonthKey;
+
+  const selectDashboardMonth = useCallback(
+    (monthKey: string) => {
+      if (!monthKey) return;
+      const safeMonthKey = monthKey > currentMonthKey ? currentMonthKey : monthKey;
+      setDashboardDate(dashboardEndDateForMonth(safeMonthKey, today));
+    },
+    [currentMonthKey, today],
+  );
+
+  const goToPreviousDashboardMonth = useCallback(() => {
+    selectDashboardMonth(shiftMonthKey(dashboardMonthKey, -1));
+  }, [dashboardMonthKey, selectDashboardMonth]);
+
+  const goToNextDashboardMonth = useCallback(() => {
+    if (!canGoToNextDashboardMonth) return;
+    selectDashboardMonth(shiftMonthKey(dashboardMonthKey, 1));
+  }, [canGoToNextDashboardMonth, dashboardMonthKey, selectDashboardMonth]);
 
   const farmSnapshot = useMemo<FarmDataSnapshot>(
     () => ({
@@ -2122,6 +2170,60 @@ const Index = () => {
             <div>
               <p className="text-zinc-500">Margin rate</p>
               <p className="font-bold text-zinc-950">{formatPercent(marginRate)}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="no-print mb-4 rounded-[8px] border border-amber-200 bg-white p-3 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] bg-yellow-100 text-amber-800">
+                <CalendarDays className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-zinc-950">Periode Dashboard</p>
+                <p className="text-sm text-zinc-600">
+                  Menampilkan {dashboardMonthLabel} dengan rentang {dashboardRangeLabel}. Pilih {previousMonthLabel} untuk melihat bulan sebelumnya.
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-[auto_minmax(150px,190px)_auto_auto] sm:items-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-[8px] border-amber-300 px-3 text-amber-900 hover:bg-yellow-100"
+                onClick={goToPreviousDashboardMonth}
+              >
+                <ChevronLeft className="mr-2 h-4 w-4" />
+                Sebelumnya
+              </Button>
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-zinc-600">Bulan</Label>
+                <Input
+                  type="month"
+                  value={dashboardMonthKey}
+                  max={currentMonthKey}
+                  className="h-10 rounded-[8px] border-amber-300 bg-white"
+                  onChange={(event) => selectDashboardMonth(event.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 rounded-[8px] border-amber-300 px-3 text-amber-900 hover:bg-yellow-100"
+                onClick={goToNextDashboardMonth}
+                disabled={!canGoToNextDashboardMonth}
+              >
+                Berikutnya
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
+                className="h-10 rounded-[8px] bg-amber-500 px-3 text-amber-950 hover:bg-amber-600"
+                onClick={() => selectDashboardMonth(currentMonthKey)}
+              >
+                Bulan Ini
+              </Button>
             </div>
           </div>
         </section>
