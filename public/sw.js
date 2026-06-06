@@ -1,4 +1,4 @@
-const CACHE_NAME = "layerfarm-pwa-v2026-05-07-02";
+const CACHE_NAME = "layerfarm-pwa-v2026-05-08-01";
 const APP_SHELL = ["/", "/manifest.json", "/layerfarm-logo.svg", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
@@ -28,6 +28,7 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith("/api/")) return;
 
   if (request.mode === "navigate") {
     event.respondWith(

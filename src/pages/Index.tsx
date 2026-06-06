@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -41,7 +41,6 @@ import {
   TrendingUp,
   Truck,
   Trash2,
-  Users,
   Wallet,
   Warehouse,
   Wheat,
@@ -114,6 +113,7 @@ type FeedRecord = {
   stockKg: number;
   pricePerKg: number;
   feedType: string;
+  sourceProductionId?: string;
 };
 
 type HealthStatus = "Terjadwal" | "Selesai" | "Perlu tindakan";
@@ -274,6 +274,27 @@ const isoDaysFrom = (days: number) => {
 
 const parseDate = (isoDate: string) => new Date(`${isoDate}T00:00:00`);
 
+const buildDateRange = (startIso: string, endIso: string) => {
+  const start = parseDate(startIso);
+  const end = parseDate(endIso);
+
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) {
+    return [endIso];
+  }
+
+  const dates: string[] = [];
+  const cursor = new Date(start);
+
+  while (cursor <= end) {
+    dates.push(toInputDate(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return dates;
+};
+
+const firstDayOfMonth = (isoDate: string) => `${isoDate.slice(0, 7)}-01`;
+
 const diffDays = (targetIso: string, baseIso: string) => {
   const target = parseDate(targetIso).getTime();
   const base = parseDate(baseIso).getTime();
@@ -282,6 +303,7 @@ const diffDays = (targetIso: string, baseIso: string) => {
 
 const formatDate = (isoDate: string) => dateFormatter.format(parseDate(isoDate));
 const formatShortDate = (isoDate: string) => shortDateFormatter.format(parseDate(isoDate));
+const formatDayTick = (value: string | number) => String(value).slice(0, 2);
 const formatNumber = (value: number) => numberFormatter.format(Math.round(value));
 const formatCompact = (value: number) => compactFormatter.format(value);
 const formatCurrency = (value: number) => currencyFormatter.format(value);
@@ -292,6 +314,32 @@ const safeDivide = (numerator: number, denominator: number) => (denominator > 0 
 const asNumber = (value: string) => Number(value) || 0;
 const gramsToKg = (value: string) => asNumber(value) / 1000;
 const populationOf = (flock: Flock) => Math.max(0, flock.initialPopulation - flock.deaths - flock.culled);
+const feedRecordOrder = (record: FeedRecord) => {
+  const match = record.id.match(/(\d+)$/);
+  return match ? Number(match[1]) : 0;
+};
+const normalizeLatestFeedRecord = (records: FeedRecord[], flockId: string) => {
+  let latest: FeedRecord | undefined;
+  let runningStock = 0;
+
+  records
+    .filter((record) => record.flockId === flockId)
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      return feedRecordOrder(a) - feedRecordOrder(b);
+    })
+    .forEach((record) => {
+      const stockKg =
+        record.stockKg <= 0 && record.incomingKg > 0
+          ? Math.max(0, runningStock + record.incomingKg - record.usedKg)
+          : record.stockKg;
+
+      runningStock = stockKg;
+      latest = { ...record, stockKg };
+    });
+
+  return latest;
+};
 
 const readStorage = <T,>(key: string, fallback: T): T => {
   try {
@@ -584,6 +632,40 @@ const createFinanceForm = (): FinanceForm => ({
   soldEggs: "",
 });
 
+const createClearedDailyForm = (): DailyForm => ({
+  ...createDailyForm(""),
+  date: "",
+  deaths: "",
+});
+
+const createClearedFlockForm = (): FlockForm => ({
+  ...createFlockForm(),
+  deaths: "",
+  culled: "",
+  houseType: "",
+  targetProduction: "",
+  startedAt: "",
+  plannedCullingDate: "",
+});
+
+const createClearedFeedForm = (): FeedForm => ({
+  ...createFeedForm(""),
+  date: "",
+  pricePerKg: "",
+  feedType: "",
+});
+
+const createClearedHealthForm = (): HealthForm => ({
+  ...createHealthForm(""),
+  date: "",
+  deaths: "",
+});
+
+const createClearedFinanceForm = (): FinanceForm => ({
+  ...createFinanceForm(),
+  date: "",
+});
+
 const productionChartConfig = {
   produksi: { label: "Produksi telur", color: "#f59e0b" },
   target: { label: "Target", color: "#facc15" },
@@ -628,6 +710,37 @@ const metricToneClasses = {
   violet: "bg-violet-50 text-violet-700 ring-violet-200",
 };
 
+function LayerHenIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={className}
+      aria-hidden="true"
+    >
+      <path
+        fill="currentColor"
+        d="M17.4 2.3c.7.1 1.2.6 1.4 1.2.5-.5 1.3-.5 1.9 0 .5.6.4 1.3-.1 1.8.7.1 1.2.6 1.3 1.3.1.8-.5 1.4-1.3 1.6.4.5.4 1.2 0 1.7-.4.6-1.2.7-1.8.4-.4.5-.9.8-1.5 1-1.2.3-2.3-.3-2.9-1.5-.8-1.7.2-3.5 2-4.2-.2-.7-.1-1.3.2-1.9.2-.5.5-.9.8-1.4Z"
+      />
+      <path
+        fill="currentColor"
+        d="M3.4 7.7c2.7-2.4 6.3-1.7 8.2 1.6 1.1-.9 2.2-1.4 3.5-1.4 2.4 0 4.3 1.8 4.3 4.2 0 2.7-2.4 5.2-5.4 5.8l-1.3 3.1h-2l.9-2.9c-1.7-.3-3.1-1.1-4.2-2.4-1.5.1-2.9 1.1-4.1 3 .1-2.5.9-4.4 2.6-5.7-1.5-.2-3 .2-4.4 1.3.7-2.2 2.1-3.7 4.1-4.4-1.3-.7-2.8-.9-4.5-.3.5-.8 1.3-1.5 2.3-1.9Z"
+      />
+      <path
+        fill="currentColor"
+        d="M19.2 8.9 23 7.6l-2.7 2.8c-.3-.6-.6-1.1-1.1-1.5Z"
+      />
+      <path
+        d="M11.9 20.7h4.7M13.5 17.8l2.1 2.9M10.9 17.8l-1.2 2.9h1.9"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
 const escapeHtml = (value: string | number) =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -658,7 +771,7 @@ function MetricCard({
   title: string;
   value: string;
   detail: string;
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string }>;
   tone: keyof typeof metricToneClasses;
   trend?: "up" | "down";
 }) {
@@ -772,21 +885,33 @@ const Index = () => {
   const [healthForm, setHealthForm] = useState<HealthForm>(() => createHealthForm(firstFlockId));
   const [financeForm, setFinanceForm] = useState<FinanceForm>(() => createFinanceForm());
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [dashboardDate, setDashboardDate] = useState(() => isoDaysAgo(0));
   const flockFormRef = useRef<HTMLFormElement>(null);
   const dailyFormRef = useRef<HTMLFormElement>(null);
+  const feedFormRef = useRef<HTMLFormElement>(null);
   const financeFormRef = useRef<HTMLFormElement>(null);
   const [editingFlockId, setEditingFlockId] = useState<string | null>(null);
   const [editingProductionId, setEditingProductionId] = useState<string | null>(null);
+  const [editingFeedId, setEditingFeedId] = useState<string | null>(null);
   const [editingFinanceId, setEditingFinanceId] = useState<string | null>(null);
   const [cloudStatus, setCloudStatus] = useState<"loading" | "saving" | "synced" | "offline">("loading");
   const cloudReadyRef = useRef(false);
   const cloudSaveTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const lastCloudUpdatedAtRef = useRef<string | null>(null);
   const lastPushedSnapshotRef = useRef("");
+  const latestLocalSnapshotRef = useRef("");
+  const pendingCloudSaveRef = useRef("");
   const farmSnapshotRef = useRef<FarmDataSnapshot | null>(null);
 
   const today = isoDaysAgo(0);
   const last7Dates = useMemo(() => Array.from({ length: 7 }, (_, index) => isoDaysAgo(6 - index)), []);
+  const dashboardEndDate = dashboardDate || today;
+  const dashboardDates = useMemo(
+    () => buildDateRange(firstDayOfMonth(dashboardEndDate), dashboardEndDate),
+    [dashboardEndDate],
+  );
+  const dashboardRangeLabel = `${formatShortDate(dashboardDates[0])} - ${formatShortDate(dashboardEndDate)}`;
+  const dashboardDateLabel = dashboardEndDate === today ? "hari ini" : formatShortDate(dashboardEndDate);
 
   const farmSnapshot = useMemo<FarmDataSnapshot>(
     () => ({
@@ -807,6 +932,58 @@ const Index = () => {
     if (Array.isArray(snapshot.financeRecords)) setFinanceRecords(snapshot.financeRecords);
   }, []);
 
+  const persistFarmSnapshot = useCallback((snapshot: FarmDataSnapshot, mode: "instant" | "debounced" = "debounced") => {
+    const serialized = JSON.stringify(snapshot);
+    farmSnapshotRef.current = snapshot;
+    latestLocalSnapshotRef.current = serialized;
+
+    writeStorage(STORAGE_KEYS.flocks, snapshot.flocks);
+    writeStorage(STORAGE_KEYS.production, snapshot.productionRecords);
+    writeStorage(STORAGE_KEYS.feed, snapshot.feedRecords);
+    writeStorage(STORAGE_KEYS.health, snapshot.healthRecords);
+    writeStorage(STORAGE_KEYS.finance, snapshot.financeRecords);
+
+    if (!cloudReadyRef.current) {
+      pendingCloudSaveRef.current = serialized;
+      return;
+    }
+    if (mode === "debounced" && pendingCloudSaveRef.current === serialized) return;
+    if (serialized === lastPushedSnapshotRef.current) return;
+
+    setCloudStatus("saving");
+    if (cloudSaveTimerRef.current) {
+      window.clearTimeout(cloudSaveTimerRef.current);
+      cloudSaveTimerRef.current = null;
+    }
+
+    const saveSnapshot = () => {
+      pendingCloudSaveRef.current = serialized;
+      saveAdminFarmState(snapshot)
+        .then((remote) => {
+          if (cloudSaveTimerRef.current) {
+            window.clearTimeout(cloudSaveTimerRef.current);
+            cloudSaveTimerRef.current = null;
+          }
+          if (latestLocalSnapshotRef.current !== serialized) return;
+          pendingCloudSaveRef.current = "";
+          lastPushedSnapshotRef.current = serialized;
+          lastCloudUpdatedAtRef.current = remote.updatedAt;
+          setCloudStatus("synced");
+        })
+        .catch(() => {
+          if (latestLocalSnapshotRef.current === serialized) pendingCloudSaveRef.current = serialized;
+          setCloudStatus("offline");
+        });
+    };
+
+    if (mode === "instant") {
+      saveSnapshot();
+      return;
+    }
+
+    cloudSaveTimerRef.current = window.setTimeout(saveSnapshot, 150);
+  }, []);
+
   useEffect(() => writeStorage(STORAGE_KEYS.flocks, flocks), [flocks]);
   useEffect(() => writeStorage(STORAGE_KEYS.production, productionRecords), [productionRecords]);
   useEffect(() => writeStorage(STORAGE_KEYS.feed, feedRecords), [feedRecords]);
@@ -814,6 +991,7 @@ const Index = () => {
   useEffect(() => writeStorage(STORAGE_KEYS.finance, financeRecords), [financeRecords]);
   useEffect(() => {
     farmSnapshotRef.current = farmSnapshot;
+    latestLocalSnapshotRef.current = JSON.stringify(farmSnapshot);
   }, [farmSnapshot]);
 
   useEffect(() => {
@@ -822,12 +1000,22 @@ const Index = () => {
     loadAdminFarmState<FarmDataSnapshot>()
       .then(async (remote) => {
         if (cancelled) return;
-        if (remote.state) {
-          lastPushedSnapshotRef.current = JSON.stringify(remote.state);
+        if (pendingCloudSaveRef.current && farmSnapshotRef.current) {
+          const saved = await saveAdminFarmState(farmSnapshotRef.current);
+          const serialized = JSON.stringify(farmSnapshotRef.current);
+          pendingCloudSaveRef.current = "";
+          lastPushedSnapshotRef.current = serialized;
+          latestLocalSnapshotRef.current = serialized;
+          lastCloudUpdatedAtRef.current = saved.updatedAt;
+        } else if (remote.state) {
+          const remoteSerialized = JSON.stringify(remote.state);
+          lastPushedSnapshotRef.current = remoteSerialized;
+          latestLocalSnapshotRef.current = remoteSerialized;
           applyCloudSnapshot(remote.state);
         } else if (farmSnapshotRef.current) {
           const saved = await saveAdminFarmState(farmSnapshotRef.current);
           lastPushedSnapshotRef.current = JSON.stringify(farmSnapshotRef.current);
+          latestLocalSnapshotRef.current = lastPushedSnapshotRef.current;
           lastCloudUpdatedAtRef.current = saved.updatedAt;
         }
         if (remote.updatedAt) lastCloudUpdatedAtRef.current = remote.updatedAt;
@@ -849,32 +1037,29 @@ const Index = () => {
     const serialized = JSON.stringify(farmSnapshot);
     if (!cloudReadyRef.current || serialized === lastPushedSnapshotRef.current) return;
 
-    setCloudStatus("saving");
-    if (cloudSaveTimerRef.current) window.clearTimeout(cloudSaveTimerRef.current);
-
-    cloudSaveTimerRef.current = window.setTimeout(() => {
-      saveAdminFarmState(farmSnapshot)
-        .then((remote) => {
-          lastPushedSnapshotRef.current = serialized;
-          lastCloudUpdatedAtRef.current = remote.updatedAt;
-          setCloudStatus("synced");
-        })
-        .catch(() => setCloudStatus("offline"));
-    }, 900);
+    persistFarmSnapshot(farmSnapshot);
 
     return () => {
       if (cloudSaveTimerRef.current) window.clearTimeout(cloudSaveTimerRef.current);
     };
-  }, [farmSnapshot]);
+  }, [farmSnapshot, persistFarmSnapshot]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       if (!cloudReadyRef.current) return;
 
+      if (pendingCloudSaveRef.current && farmSnapshotRef.current) {
+        persistFarmSnapshot(farmSnapshotRef.current, "instant");
+        return;
+      }
+
       loadAdminFarmState<FarmDataSnapshot>()
         .then((remote) => {
           if (!remote.state || !remote.updatedAt || remote.updatedAt === lastCloudUpdatedAtRef.current) return;
-          lastPushedSnapshotRef.current = JSON.stringify(remote.state);
+          const remoteSerialized = JSON.stringify(remote.state);
+          if (pendingCloudSaveRef.current || latestLocalSnapshotRef.current !== lastPushedSnapshotRef.current) return;
+          lastPushedSnapshotRef.current = remoteSerialized;
+          latestLocalSnapshotRef.current = remoteSerialized;
           lastCloudUpdatedAtRef.current = remote.updatedAt;
           applyCloudSnapshot(remote.state);
           setCloudStatus("synced");
@@ -883,7 +1068,17 @@ const Index = () => {
     }, 30000);
 
     return () => window.clearInterval(interval);
-  }, [applyCloudSnapshot]);
+  }, [applyCloudSnapshot, persistFarmSnapshot]);
+
+  useEffect(() => {
+    const retryPendingCloudSave = () => {
+      if (!cloudReadyRef.current || !pendingCloudSaveRef.current || !farmSnapshotRef.current) return;
+      persistFarmSnapshot(farmSnapshotRef.current, "instant");
+    };
+
+    window.addEventListener("online", retryPendingCloudSave);
+    return () => window.removeEventListener("online", retryPendingCloudSave);
+  }, [persistFarmSnapshot]);
 
   const flockNameById = useMemo(
     () => new Map(flocks.map((flock) => [flock.id, flock.name])),
@@ -895,26 +1090,24 @@ const Index = () => {
   const latestFeedByFlock = useMemo(() => {
     const latest = new Map<string, FeedRecord>();
 
-    feedRecords.forEach((record) => {
-      const current = latest.get(record.flockId);
-      if (!current || record.date > current.date || (record.date === current.date && record.id > current.id)) {
-        latest.set(record.flockId, record);
-      }
+    flocks.forEach((flock) => {
+      const latestRecord = normalizeLatestFeedRecord(feedRecords, flock.id);
+      if (latestRecord) latest.set(flock.id, latestRecord);
     });
 
     return latest;
-  }, [feedRecords]);
+  }, [feedRecords, flocks]);
 
-  const todayProductions = useMemo(
-    () => productionRecords.filter((record) => record.date === today),
-    [productionRecords, today],
+  const dashboardDateProductions = useMemo(
+    () => productionRecords.filter((record) => record.date === dashboardEndDate),
+    [dashboardEndDate, productionRecords],
   );
 
-  const eggToday = todayProductions.reduce((sum, record) => sum + record.eggCount, 0);
-  const gradeAToday = todayProductions.reduce((sum, record) => sum + record.gradeA, 0);
-  const gradeBToday = todayProductions.reduce((sum, record) => sum + record.gradeB, 0);
-  const crackedToday = todayProductions.reduce((sum, record) => sum + record.cracked, 0);
-  const abnormalToday = todayProductions.reduce((sum, record) => sum + record.abnormal, 0);
+  const eggToday = dashboardDateProductions.reduce((sum, record) => sum + record.eggCount, 0);
+  const gradeAToday = dashboardDateProductions.reduce((sum, record) => sum + record.gradeA, 0);
+  const gradeBToday = dashboardDateProductions.reduce((sum, record) => sum + record.gradeB, 0);
+  const crackedToday = dashboardDateProductions.reduce((sum, record) => sum + record.cracked, 0);
+  const abnormalToday = dashboardDateProductions.reduce((sum, record) => sum + record.abnormal, 0);
   const activePopulation = flocks.reduce((sum, flock) => sum + populationOf(flock), 0);
   const initialPopulation = flocks.reduce((sum, flock) => sum + flock.initialPopulation, 0);
   const totalDeaths = flocks.reduce((sum, flock) => sum + flock.deaths, 0);
@@ -927,9 +1120,11 @@ const Index = () => {
     .reduce((sum, record) => sum + (record.soldEggs ?? 0), 0);
   const unsoldEggStock = Math.max(0, totalEggProduced - soldEggsTotal);
   const feedStockTotal = flocks.reduce((sum, flock) => sum + (latestFeedByFlock.get(flock.id)?.stockKg ?? 0), 0);
-  const feedUsedToday = feedRecords
-    .filter((record) => record.date === today)
+  const feedUsageDate = dashboardEndDate;
+  const feedUsedOnInputDate = feedRecords
+    .filter((record) => record.date === feedUsageDate)
     .reduce((sum, record) => sum + record.usedKg, 0);
+  const feedUsageLabel = feedUsageDate === today ? "hari ini" : formatDate(feedUsageDate);
 
   const weeklyProductionRecords = productionRecords.filter((record) => record.date >= last7Dates[0]);
   const weeklyFeedRecords = feedRecords.filter((record) => record.date >= last7Dates[0]);
@@ -992,7 +1187,7 @@ const Index = () => {
 
   const productionChartData = useMemo(
     () =>
-      last7Dates.map((date) => {
+      dashboardDates.map((date) => {
         const dailyRecords = productionRecords.filter((record) => record.date === date);
         const eggCount = dailyRecords.reduce((sum, record) => sum + record.eggCount, 0);
         return {
@@ -1003,12 +1198,12 @@ const Index = () => {
           abnormal: dailyRecords.reduce((sum, record) => sum + record.abnormal, 0),
         };
       }),
-    [activePopulation, last7Dates, productionRecords],
+    [activePopulation, dashboardDates, productionRecords],
   );
 
   const feedAndMortalityData = useMemo(
     () =>
-      last7Dates.map((date) => {
+      dashboardDates.map((date) => {
         const feedKg = feedRecords
           .filter((record) => record.date === date)
           .reduce((sum, record) => sum + record.usedKg, 0);
@@ -1025,12 +1220,12 @@ const Index = () => {
           mortalitas: productionDeaths + healthDeaths,
         };
       }),
-    [feedRecords, healthRecords, last7Dates, productionRecords],
+    [feedRecords, healthRecords, dashboardDates, productionRecords],
   );
 
   const financeChartData = useMemo(
     () =>
-      last7Dates.map((date) => {
+      dashboardDates.map((date) => {
         const feedUsageCost = feedRecords
           .filter((record) => record.date === date)
           .reduce((sum, record) => sum + record.usedKg * record.pricePerKg, 0);
@@ -1047,7 +1242,7 @@ const Index = () => {
           biaya: feedUsageCost + expense,
         };
       }),
-    [feedRecords, financeRecords, last7Dates],
+    [feedRecords, financeRecords, dashboardDates],
   );
 
   const gradeData = [
@@ -1177,8 +1372,8 @@ const Index = () => {
           ["Total telur diproduksi", formatNumber(totalEggProduced)],
           ["Telur terjual tercatat", formatNumber(soldEggsTotal)],
           ["Stok telur belum terjual", formatNumber(unsoldEggStock)],
-          ["Produksi telur hari ini", formatNumber(eggToday)],
-          ["HD production hari ini", formatPercent(productionRateToday)],
+          [`Produksi telur ${dashboardDateLabel}`, formatNumber(eggToday)],
+          [`HD production ${dashboardDateLabel}`, formatPercent(productionRateToday)],
           ["FCR 7 hari", formatDecimal(weeklyFcr, 2)],
           ["Stok pakan", `${formatNumber(feedStockTotal)} kg`],
           ["Margin total", formatCurrency(marginTotal)],
@@ -1206,6 +1401,7 @@ const Index = () => {
     ],
     [
       activePopulation,
+      dashboardDateLabel,
       eggToday,
       feedStockTotal,
       flockPerformance,
@@ -1244,32 +1440,45 @@ const Index = () => {
       note: dailyForm.note,
     };
 
-    setProductionRecords((current) =>
-      editingProductionId
-        ? current.map((item) => (item.id === editingProductionId ? record : item))
-        : [record, ...current],
-    );
+    const nextProductionRecords = editingProductionId
+      ? productionRecords.map((item) => (item.id === editingProductionId ? record : item))
+      : [record, ...productionRecords];
+    const previousAutoFeedRecord = previousRecord
+      ? feedRecords.find((feedRecord) => feedRecord.sourceProductionId === previousRecord.id)
+      : undefined;
+    const baseFeedRecords = previousAutoFeedRecord
+      ? feedRecords.filter((feedRecord) => feedRecord.id !== previousAutoFeedRecord.id)
+      : feedRecords;
+    let nextFeedRecords = feedRecords;
+    let nextFlocks = flocks;
 
-    if (!editingProductionId && feedUsedKg > 0) {
-      const latestFeed = latestFeedByFlock.get(flockId);
-      setFeedRecords((current) => [
-        {
-          id: `feed-used-${Date.now()}`,
-          date: dailyForm.date,
-          flockId,
-          incomingKg: 0,
-          usedKg: feedUsedKg,
-          stockKg: Math.max(0, (latestFeed?.stockKg ?? 0) - feedUsedKg),
-          pricePerKg: latestFeed?.pricePerKg ?? 7_200,
-          feedType: latestFeed?.feedType ?? "Layer mash",
-        },
-        ...current,
-      ]);
+    setProductionRecords(nextProductionRecords);
+
+    if (feedUsedKg > 0) {
+      const latestFeed = normalizeLatestFeedRecord(baseFeedRecords, flockId);
+      const autoFeedRecord: FeedRecord = {
+        id: previousAutoFeedRecord?.id ?? `feed-used-${Date.now()}`,
+        date: dailyForm.date,
+        flockId,
+        incomingKg: 0,
+        usedKg: feedUsedKg,
+        stockKg: Math.max(0, (latestFeed?.stockKg ?? 0) - feedUsedKg),
+        pricePerKg: latestFeed?.pricePerKg ?? 7_200,
+        feedType: latestFeed?.feedType ?? "Layer mash",
+        sourceProductionId: record.id,
+      };
+      nextFeedRecords = [
+        autoFeedRecord,
+        ...baseFeedRecords,
+      ];
+      setFeedRecords(nextFeedRecords);
+    } else if (previousAutoFeedRecord) {
+      nextFeedRecords = baseFeedRecords;
+      setFeedRecords(nextFeedRecords);
     }
 
     if (previousRecord) {
-      setFlocks((current) =>
-        current.map((flock) => {
+      nextFlocks = flocks.map((flock) => {
           if (previousRecord.flockId === flockId && flock.id === flockId) {
             return { ...flock, deaths: Math.max(0, flock.deaths + deaths - previousRecord.deaths) };
           }
@@ -1280,24 +1489,38 @@ const Index = () => {
             return { ...flock, deaths: flock.deaths + deaths };
           }
           return flock;
-        }),
-      );
+        });
+      setFlocks(nextFlocks);
     } else if (deaths > 0) {
-      setFlocks((current) =>
-        current.map((flock) => (flock.id === flockId ? { ...flock, deaths: flock.deaths + deaths } : flock)),
-      );
+      nextFlocks = flocks.map((flock) => (flock.id === flockId ? { ...flock, deaths: flock.deaths + deaths } : flock));
+      setFlocks(nextFlocks);
     }
+
+    persistFarmSnapshot(
+      {
+        flocks: nextFlocks,
+        productionRecords: nextProductionRecords,
+        feedRecords: nextFeedRecords,
+        healthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
 
     setDailyForm((current) => ({
       ...createDailyForm(flockId),
       date: current.date,
       flockId,
     }));
+    setDashboardDate(dailyForm.date || today);
     setEditingProductionId(null);
   };
 
   const startProductionEdit = (record: ProductionRecord) => {
+    const linkedFeedRecord = feedRecords.find((feedRecord) => feedRecord.sourceProductionId === record.id);
+
     setEditingProductionId(record.id);
+    setDashboardDate(record.date);
     setDailyForm({
       date: record.date,
       flockId: record.flockId,
@@ -1306,7 +1529,7 @@ const Index = () => {
       gradeB: String(record.gradeB),
       cracked: String(record.cracked),
       abnormal: String(record.abnormal),
-      feedUsedKg: "",
+      feedUsedKg: linkedFeedRecord ? String(Math.round(linkedFeedRecord.usedKg * 1000)) : "",
       deaths: String(record.deaths),
       note: record.note,
     });
@@ -1323,21 +1546,41 @@ const Index = () => {
   };
 
   const deleteProductionRecord = (record: ProductionRecord) => {
-    setProductionRecords((current) => current.filter((item) => item.id !== record.id));
+    const nextProductionRecords = productionRecords.filter((item) => item.id !== record.id);
+    const nextFeedRecords = feedRecords.filter((item) => item.sourceProductionId !== record.id);
+    const nextFlocks =
+      record.deaths > 0
+        ? flocks.map((flock) =>
+            flock.id === record.flockId ? { ...flock, deaths: Math.max(0, flock.deaths - record.deaths) } : flock,
+          )
+        : flocks;
+
+    setProductionRecords(nextProductionRecords);
+    if (nextFeedRecords.length !== feedRecords.length) {
+      setFeedRecords(nextFeedRecords);
+    }
     if (record.deaths > 0) {
-      setFlocks((current) =>
-        current.map((flock) =>
-          flock.id === record.flockId ? { ...flock, deaths: Math.max(0, flock.deaths - record.deaths) } : flock,
-        ),
-      );
+      setFlocks(nextFlocks);
     }
     if (editingProductionId === record.id) {
       cancelProductionEdit();
     }
+    setDashboardDate(record.date || today);
+    persistFarmSnapshot(
+      {
+        flocks: nextFlocks,
+        productionRecords: nextProductionRecords,
+        feedRecords: nextFeedRecords,
+        healthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
   };
 
   const startFinanceEdit = (record: FinanceRecord) => {
     setEditingFinanceId(record.id);
+    setDashboardDate(record.date);
     setFinanceForm({
       date: record.date,
       type: record.type,
@@ -1364,10 +1607,23 @@ const Index = () => {
   };
 
   const deleteFinanceRecord = (record: FinanceRecord) => {
-    setFinanceRecords((current) => current.filter((item) => item.id !== record.id));
+    const nextFinanceRecords = financeRecords.filter((item) => item.id !== record.id);
+
+    setFinanceRecords(nextFinanceRecords);
     if (editingFinanceId === record.id) {
       cancelFinanceEdit();
     }
+    setDashboardDate(record.date || today);
+    persistFarmSnapshot(
+      {
+        flocks,
+        productionRecords,
+        feedRecords,
+        healthRecords,
+        financeRecords: nextFinanceRecords,
+      },
+      "instant",
+    );
   };
 
   const handleFlockSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1390,14 +1646,26 @@ const Index = () => {
       plannedCullingDate: flockForm.plannedCullingDate,
     };
 
-    setFlocks((current) =>
-      editingFlockId ? current.map((flock) => (flock.id === editingFlockId ? nextFlock : flock)) : [...current, nextFlock],
-    );
+    const nextFlocks = editingFlockId
+      ? flocks.map((flock) => (flock.id === editingFlockId ? nextFlock : flock))
+      : [...flocks, nextFlock];
+
+    setFlocks(nextFlocks);
     if (!editingFlockId) {
       setDailyForm((current) => ({ ...current, flockId: id }));
       setFeedForm((current) => ({ ...current, flockId: id }));
       setHealthForm((current) => ({ ...current, flockId: id }));
     }
+    persistFarmSnapshot(
+      {
+        flocks: nextFlocks,
+        productionRecords,
+        feedRecords,
+        healthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
     setEditingFlockId(null);
     setFlockForm(createFlockForm());
   };
@@ -1410,24 +1678,104 @@ const Index = () => {
     const incomingKg = asNumber(feedForm.incomingKg);
     const usedKg = gramsToKg(feedForm.usedKg);
     const latestFeed = latestFeedByFlock.get(flockId);
-    const stockKg = feedForm.stockKg
+    const stockKg = feedForm.stockKg.trim()
       ? asNumber(feedForm.stockKg)
       : Math.max(0, (latestFeed?.stockKg ?? 0) + incomingKg - usedKg);
 
-    setFeedRecords((current) => [
+    const nextFeedRecord: FeedRecord = {
+      id: editingFeedId ?? `feed-${Date.now()}`,
+      date: feedForm.date,
+      flockId,
+      incomingKg,
+      usedKg,
+      stockKg,
+      pricePerKg: asNumber(feedForm.pricePerKg),
+      feedType: feedForm.feedType,
+    };
+
+    const nextFeedRecords = editingFeedId
+      ? feedRecords.map((record) => (record.id === editingFeedId ? nextFeedRecord : record))
+      : [nextFeedRecord, ...feedRecords];
+
+    setFeedRecords(nextFeedRecords);
+    setDashboardDate(feedForm.date || today);
+    persistFarmSnapshot(
       {
-        id: `feed-${Date.now()}`,
-        date: feedForm.date,
-        flockId,
-        incomingKg,
-        usedKg,
-        stockKg,
-        pricePerKg: asNumber(feedForm.pricePerKg),
-        feedType: feedForm.feedType,
+        flocks,
+        productionRecords,
+        feedRecords: nextFeedRecords,
+        healthRecords,
+        financeRecords,
       },
-      ...current,
-    ]);
+      "instant",
+    );
+    setEditingFeedId(null);
     setFeedForm((current) => ({ ...createFeedForm(flockId), date: current.date }));
+  };
+
+  const startFeedEdit = (record: FeedRecord) => {
+    setEditingFeedId(record.id);
+    setDashboardDate(record.date);
+    setFeedForm({
+      date: record.date,
+      flockId: record.flockId,
+      incomingKg: String(record.incomingKg),
+      usedKg: String(Math.round(record.usedKg * 1000)),
+      stockKg: String(record.stockKg),
+      pricePerKg: String(record.pricePerKg),
+      feedType: record.feedType,
+    });
+    setActiveTab("pakan");
+    window.setTimeout(() => {
+      feedFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      feedFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const focusFeedStockInput = (flockId: string) => {
+    const latestFeed = latestFeedByFlock.get(flockId);
+
+    setEditingFeedId(null);
+    setFeedForm({
+      ...createFeedForm(flockId),
+      date: latestFeed?.date ?? today,
+      incomingKg: "",
+      usedKg: "",
+      stockKg: latestFeed ? String(latestFeed.stockKg) : "",
+      pricePerKg: String(latestFeed?.pricePerKg ?? 7_200),
+      feedType: latestFeed?.feedType ?? "Layer mash 17%",
+    });
+    setDashboardDate(latestFeed?.date ?? today);
+    setActiveTab("pakan");
+    window.setTimeout(() => {
+      feedFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      feedFormRef.current?.querySelector("input")?.focus();
+    }, 0);
+  };
+
+  const cancelFeedEdit = () => {
+    setEditingFeedId(null);
+    setFeedForm((current) => createFeedForm(current.flockId));
+  };
+
+  const deleteFeedRecord = (record: FeedRecord) => {
+    const nextFeedRecords = feedRecords.filter((item) => item.id !== record.id);
+
+    setFeedRecords(nextFeedRecords);
+    if (editingFeedId === record.id) {
+      cancelFeedEdit();
+    }
+    setDashboardDate(record.date || today);
+    persistFarmSnapshot(
+      {
+        flocks,
+        productionRecords,
+        feedRecords: nextFeedRecords,
+        healthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
   };
 
   const handleHealthSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -1435,7 +1783,7 @@ const Index = () => {
     if (!healthForm.flockId || !healthForm.name) return;
 
     const deaths = asNumber(healthForm.deaths);
-    setHealthRecords((current) => [
+    const nextHealthRecords = [
       {
         id: `health-${Date.now()}`,
         date: healthForm.date,
@@ -1447,16 +1795,30 @@ const Index = () => {
         deaths,
         note: healthForm.note,
       },
-      ...current,
-    ]);
+      ...healthRecords,
+    ];
+    let nextFlocks = flocks;
+
+    setHealthRecords(nextHealthRecords);
+    setDashboardDate(healthForm.date || today);
 
     if (deaths > 0) {
-      setFlocks((current) =>
-        current.map((flock) =>
-          flock.id === healthForm.flockId ? { ...flock, deaths: flock.deaths + deaths } : flock,
-        ),
+      nextFlocks = flocks.map((flock) =>
+        flock.id === healthForm.flockId ? { ...flock, deaths: flock.deaths + deaths } : flock,
       );
+      setFlocks(nextFlocks);
     }
+
+    persistFarmSnapshot(
+      {
+        flocks: nextFlocks,
+        productionRecords,
+        feedRecords,
+        healthRecords: nextHealthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
 
     setHealthForm((current) => ({ ...createHealthForm(current.flockId), date: current.date }));
   };
@@ -1477,10 +1839,21 @@ const Index = () => {
       soldEggs: isEggSale ? asNumber(financeForm.soldEggs) : 0,
     };
 
-    setFinanceRecords((current) =>
-      editingFinanceId
-        ? current.map((record) => (record.id === editingFinanceId ? nextRecord : record))
-        : [nextRecord, ...current],
+    const nextFinanceRecords = editingFinanceId
+      ? financeRecords.map((record) => (record.id === editingFinanceId ? nextRecord : record))
+      : [nextRecord, ...financeRecords];
+
+    setFinanceRecords(nextFinanceRecords);
+    setDashboardDate(financeForm.date || today);
+    persistFarmSnapshot(
+      {
+        flocks,
+        productionRecords,
+        feedRecords,
+        healthRecords,
+        financeRecords: nextFinanceRecords,
+      },
+      "instant",
     );
     setEditingFinanceId(null);
     setFinanceForm((current) => ({ ...createFinanceForm(), date: current.date, type: current.type, category: current.category }));
@@ -1527,20 +1900,31 @@ const Index = () => {
 
   const exportPdf = () => window.print();
 
-  const resetDemoData = () => {
-    const nextFlocks = buildInitialFlocks();
-    setFlocks(nextFlocks);
-    setProductionRecords(buildInitialProduction());
-    setFeedRecords(buildInitialFeed());
-    setHealthRecords(buildInitialHealth());
-    setFinanceRecords(buildInitialFinance());
-    setDailyForm(createDailyForm(nextFlocks[0].id));
-    setFeedForm(createFeedForm(nextFlocks[0].id));
-    setHealthForm(createHealthForm(nextFlocks[0].id));
-    setFinanceForm(createFinanceForm());
+  const resetAllData = () => {
+    const emptySnapshot: FarmDataSnapshot = {
+      flocks: [],
+      productionRecords: [],
+      feedRecords: [],
+      healthRecords: [],
+      financeRecords: [],
+    };
+
+    setFlocks(emptySnapshot.flocks);
+    setProductionRecords(emptySnapshot.productionRecords);
+    setFeedRecords(emptySnapshot.feedRecords);
+    setHealthRecords(emptySnapshot.healthRecords);
+    setFinanceRecords(emptySnapshot.financeRecords);
+    setDailyForm(createClearedDailyForm());
+    setFlockForm(createClearedFlockForm());
+    setFeedForm(createClearedFeedForm());
+    setHealthForm(createClearedHealthForm());
+    setFinanceForm(createClearedFinanceForm());
     setEditingFlockId(null);
     setEditingProductionId(null);
+    setEditingFeedId(null);
     setEditingFinanceId(null);
+    setDashboardDate(today);
+    persistFarmSnapshot(emptySnapshot, "instant");
   };
 
   const focusFlockForm = () => {
@@ -1582,17 +1966,33 @@ const Index = () => {
   const removeFlock = (flockId: string) => {
     const remainingFlocks = flocks.filter((flock) => flock.id !== flockId);
     const nextFlockId = remainingFlocks[0]?.id ?? "";
+    const nextProductionRecords = productionRecords.filter((record) => record.flockId !== flockId);
+    const nextFeedRecords = feedRecords.filter((record) => record.flockId !== flockId);
+    const nextHealthRecords = healthRecords.filter((record) => record.flockId !== flockId);
 
     setFlocks(remainingFlocks);
-    setProductionRecords((current) => current.filter((record) => record.flockId !== flockId));
-    setFeedRecords((current) => current.filter((record) => record.flockId !== flockId));
-    setHealthRecords((current) => current.filter((record) => record.flockId !== flockId));
+    setProductionRecords(nextProductionRecords);
+    setFeedRecords(nextFeedRecords);
+    setHealthRecords(nextHealthRecords);
     setDailyForm((current) => (current.flockId === flockId ? createDailyForm(nextFlockId) : current));
     setFeedForm((current) => (current.flockId === flockId ? createFeedForm(nextFlockId) : current));
     setHealthForm((current) => (current.flockId === flockId ? createHealthForm(nextFlockId) : current));
     if (editingFlockId === flockId) {
       cancelFlockEdit();
     }
+    if (feedRecords.some((record) => record.id === editingFeedId && record.flockId === flockId)) {
+      cancelFeedEdit();
+    }
+    persistFarmSnapshot(
+      {
+        flocks: remainingFlocks,
+        productionRecords: nextProductionRecords,
+        feedRecords: nextFeedRecords,
+        healthRecords: nextHealthRecords,
+        financeRecords,
+      },
+      "instant",
+    );
   };
 
   const renderFlockSelect = (value: string, onValueChange: (value: string) => void) => (
@@ -1649,7 +2049,7 @@ const Index = () => {
               variant="outline"
               aria-label="Reset data"
               className="h-10 w-10 min-w-0 overflow-hidden rounded-[8px] border-amber-300 bg-white/75 px-0 text-xs hover:bg-yellow-100 sm:w-auto sm:px-4 sm:text-sm"
-              onClick={resetDemoData}
+              onClick={resetAllData}
             >
               <ShieldCheck className="h-4 w-4 shrink-0 sm:mr-2" />
               <span className="hidden sm:inline">Reset</span>
@@ -1731,11 +2131,11 @@ const Index = () => {
             title="Populasi aktif"
             value={formatNumber(activePopulation)}
             detail={`${formatNumber(totalDeaths)} mati, ${formatNumber(totalCulled)} afkir`}
-            icon={Users}
+            icon={LayerHenIcon}
             tone="sky"
           />
           <MetricCard
-            title="Produksi hari ini"
+            title={`Produksi ${dashboardDateLabel}`}
             value={formatNumber(eggToday)}
             detail={`HD production ${formatPercent(productionRateToday)}`}
             icon={Egg}
@@ -1752,7 +2152,7 @@ const Index = () => {
           <MetricCard
                   title="Stok pakan"
                   value={`${formatCompact(feedStockTotal)} kg`}
-                  detail={`${formatNumber(feedUsedToday * 1000)} gram terpakai hari ini`}
+                  detail={`${formatNumber(feedUsedOnInputDate * 1000)} gram terpakai ${feedUsageLabel}`}
                   icon={Wheat}
             tone="amber"
           />
@@ -1767,12 +2167,16 @@ const Index = () => {
         </section>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <div className="no-print hidden overflow-x-auto md:block">
-            <TabsList className="h-auto min-w-max justify-start gap-1 rounded-[8px] bg-zinc-200/70 p-1">
+          <div className="no-print hidden md:block">
+            <TabsList className="grid h-auto w-full grid-cols-7 gap-1 rounded-[8px] bg-zinc-200/70 p-1">
               {appTabs.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} className="rounded-[6px]">
-                  <tab.icon className="mr-2 h-4 w-4" />
-                  {tab.label}
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="min-w-0 justify-center rounded-[6px] px-2 py-2 text-xs lg:text-sm"
+                >
+                  <tab.icon className="mr-1 h-4 w-4 shrink-0 lg:mr-2" />
+                  <span className="min-w-0 truncate">{tab.label}</span>
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -1780,11 +2184,19 @@ const Index = () => {
 
           <TabsContent value="dashboard" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[1.45fr_0.9fr]">
-              <Panel title="Grafik Produksi Telur" icon={BarChart3}>
+              <Panel
+                title="Grafik Produksi Telur"
+                icon={BarChart3}
+                action={
+                  <Badge variant="outline" className="rounded-[6px] border-amber-200 text-amber-700">
+                    {dashboardRangeLabel}
+                  </Badge>
+                }
+              >
                 <ChartContainer config={productionChartConfig} className="h-[300px] w-full aspect-auto">
                   <AreaChart data={productionChartData} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={48} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area
@@ -1826,7 +2238,7 @@ const Index = () => {
             </div>
 
             <div className="grid gap-4 xl:grid-cols-3">
-              <Panel title="Grading Telur Hari Ini" icon={ClipboardList}>
+              <Panel title={`Grading Telur ${dashboardDateLabel}`} icon={ClipboardList}>
                 {gradeData.length > 0 ? (
                   <div className="grid gap-4 sm:grid-cols-[150px_1fr] sm:items-center xl:grid-cols-1">
                     <ChartContainer config={{ telur: { label: "Telur", color: "#f59e0b" } }} className="mx-auto h-[190px] w-full max-w-[220px] aspect-auto">
@@ -1852,15 +2264,23 @@ const Index = () => {
                     </div>
                   </div>
                 ) : (
-                  <EmptyState title="Belum ada produksi hari ini" detail="Input produksi harian untuk melihat grading." />
+                  <EmptyState title={`Belum ada produksi ${dashboardDateLabel}`} detail="Input produksi harian untuk melihat grading." />
                 )}
               </Panel>
 
-              <Panel title="Pakan dan Mortalitas" icon={Activity}>
+              <Panel
+                title="Pakan dan Mortalitas"
+                icon={Activity}
+                action={
+                  <Badge variant="outline" className="rounded-[6px] border-amber-200 text-amber-700">
+                    {dashboardRangeLabel}
+                  </Badge>
+                }
+              >
                 <ChartContainer config={feedChartConfig} className="h-[260px] w-full overflow-hidden aspect-auto">
                   <ComposedChart data={feedAndMortalityData} margin={{ left: 4, right: 18, top: 12, bottom: 4 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={12} interval="preserveStartEnd" />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
                     <YAxis yAxisId="left" tickLine={false} axisLine={false} tickMargin={6} width={38} fontSize={12} />
                     <YAxis
                       yAxisId="right"
@@ -1878,11 +2298,19 @@ const Index = () => {
                 </ChartContainer>
               </Panel>
 
-              <Panel title="Biaya Harian dan Pendapatan" icon={Coins}>
+              <Panel
+                title="Biaya Harian dan Pendapatan"
+                icon={Coins}
+                action={
+                  <Badge variant="outline" className="rounded-[6px] border-amber-200 text-amber-700">
+                    {dashboardRangeLabel}
+                  </Badge>
+                }
+              >
                 <ChartContainer config={financeChartConfig} className="h-[260px] w-full aspect-auto">
                   <AreaChart data={financeChartData} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={58} tickFormatter={(value) => formatCompact(Number(value))} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area dataKey="pendapatan" type="monotone" fill="var(--color-pendapatan)" fillOpacity={0.14} stroke="var(--color-pendapatan)" strokeWidth={2} />
@@ -2166,7 +2594,16 @@ const Index = () => {
                     </div>
                   ) : null}
                   <Field label="Tanggal">
-                    <Input type="date" className="rounded-[8px]" value={dailyForm.date} onChange={(event) => setDailyForm((current) => ({ ...current, date: event.target.value }))} />
+                    <Input
+                      type="date"
+                      className="rounded-[8px]"
+                      value={dailyForm.date}
+                      onChange={(event) => {
+                        const nextDate = event.target.value;
+                        setDailyForm((current) => ({ ...current, date: nextDate }));
+                        setDashboardDate(nextDate || today);
+                      }}
+                    />
                   </Field>
                   <Field label="Kandang">
                     {renderFlockSelect(dailyForm.flockId, (value) => setDailyForm((current) => ({ ...current, flockId: value })))}
@@ -2217,7 +2654,7 @@ const Index = () => {
               </Panel>
 
               <Panel title="Riwayat Produksi dan Produktivitas" icon={ClipboardList}>
-                <div className="grid gap-3">
+                <div className="max-h-[520px] space-y-3 overflow-y-auto pr-1">
                   {productionRecords.slice(0, 14).map((record) => (
                     <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm sm:p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2303,10 +2740,24 @@ const Index = () => {
 
           <TabsContent value="pakan" className="mt-5 space-y-4">
             <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">
-              <Panel title="Catatan Pakan Masuk dan Terpakai" icon={Truck}>
-                <form onSubmit={handleFeedSubmit} className="grid gap-3 sm:grid-cols-2">
+              <Panel title={editingFeedId ? "Edit Catatan Pakan" : "Catatan Pakan Masuk dan Terpakai"} icon={editingFeedId ? Pencil : Truck}>
+                <form ref={feedFormRef} onSubmit={handleFeedSubmit} className="grid gap-3 sm:grid-cols-2">
+                  {editingFeedId ? (
+                    <div className="rounded-[8px] border border-amber-200 bg-yellow-50 px-3 py-2 text-sm text-amber-900 sm:col-span-2">
+                      Mode edit aktif. Ubah stok atau detail pakan lalu tekan <span className="font-semibold">Update Pakan</span>.
+                    </div>
+                  ) : null}
                   <Field label="Tanggal">
-                    <Input type="date" className="rounded-[8px]" value={feedForm.date} onChange={(event) => setFeedForm((current) => ({ ...current, date: event.target.value }))} />
+                    <Input
+                      type="date"
+                      className="rounded-[8px]"
+                      value={feedForm.date}
+                      onChange={(event) => {
+                        const nextDate = event.target.value;
+                        setFeedForm((current) => ({ ...current, date: nextDate }));
+                        setDashboardDate(nextDate || today);
+                      }}
+                    />
                   </Field>
                   <Field label="Kandang">
                     {renderFlockSelect(feedForm.flockId, (value) => setFeedForm((current) => ({ ...current, flockId: value })))}
@@ -2326,25 +2777,88 @@ const Index = () => {
                   <Field label="Harga/kg">
                     <Input type="number" min="0" className="rounded-[8px]" value={feedForm.pricePerKg} onChange={(event) => setFeedForm((current) => ({ ...current, pricePerKg: event.target.value }))} />
                   </Field>
-                  <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600 sm:col-span-2" type="submit">
-                    <PackageCheck className="mr-2 h-4 w-4" />
-                    Simpan Pakan
-                  </Button>
+                  <div className="grid gap-2 sm:col-span-2 sm:grid-cols-[1fr_auto]">
+                    <Button className="rounded-[8px] bg-amber-500 hover:bg-amber-600" type="submit">
+                      {editingFeedId ? <Pencil className="mr-2 h-4 w-4" /> : <PackageCheck className="mr-2 h-4 w-4" />}
+                      {editingFeedId ? "Update Pakan" : "Simpan Pakan"}
+                    </Button>
+                    {editingFeedId ? (
+                      <Button type="button" variant="outline" className="rounded-[8px] border-zinc-300" onClick={cancelFeedEdit}>
+                        Batal Edit
+                      </Button>
+                    ) : null}
+                  </div>
                 </form>
               </Panel>
 
               <Panel title="Stok Pakan dan FCR" icon={Wheat}>
                 <div className="space-y-3">
-                  {flockPerformance.map((item) => (
+                  {flockPerformance.map((item) => {
+                    const latestFeed = latestFeedByFlock.get(item.flock.id);
+
+                    return (
                     <div key={item.flock.id} className="rounded-[8px] border border-zinc-200 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-bold">{item.flock.name}</p>
-                          <p className="text-sm text-zinc-500">FCR {formatDecimal(item.fcr, 2)} - konsumsi {formatNumber(item.avgFeed)} kg/hari</p>
+                          <p className="text-sm text-zinc-500">
+                            FCR {formatDecimal(item.fcr, 2)} - konsumsi {formatNumber(item.avgFeed)} kg/hari
+                          </p>
+                          {latestFeed ? (
+                            <p className="mt-1 text-xs text-zinc-500">
+                              Update terakhir {formatDate(latestFeed.date)} - {latestFeed.feedType}
+                            </p>
+                          ) : null}
                         </div>
-                        <Badge variant="outline" className={cn("rounded-[6px]", item.daysOfFeed < 4 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-amber-300 bg-yellow-100 text-amber-800")}>
-                          {formatDecimal(item.daysOfFeed, 1)} hari stok
-                        </Badge>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Badge variant="outline" className={cn("rounded-[6px]", item.daysOfFeed < 4 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-amber-300 bg-yellow-100 text-amber-800")}>
+                            {formatDecimal(item.daysOfFeed, 1)} hari stok
+                          </Badge>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8 rounded-[8px] border-amber-200 text-amber-800 hover:bg-yellow-100"
+                            onClick={() => (latestFeed ? startFeedEdit(latestFeed) : focusFeedStockInput(item.flock.id))}
+                            aria-label={`Edit stok pakan ${item.flock.name}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {latestFeed ? (
+                            <>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-[8px] border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                    aria-label={`Hapus stok pakan ${item.flock.name}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent className="max-w-sm rounded-[8px]">
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Hapus catatan pakan?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Catatan pakan terakhir untuk {item.flock.name} akan dihapus dan stok akan mengikuti catatan sebelumnya.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel className="rounded-[8px]">Batal</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="rounded-[8px] bg-red-600 text-white hover:bg-red-700"
+                                      onClick={() => deleteFeedRecord(latestFeed)}
+                                    >
+                                      Hapus Pakan
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="mt-3">
                         <div className="mb-1 flex justify-between text-xs text-zinc-500">
@@ -2354,7 +2868,8 @@ const Index = () => {
                         <Progress value={Math.min(100, safeDivide(item.daysOfFeed, 7) * 100)} className="h-2 rounded-[4px] bg-zinc-100" />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </Panel>
             </div>
@@ -2365,7 +2880,16 @@ const Index = () => {
               <Panel title="Jadwal Vaksin, Obat, dan Treatment" icon={Syringe}>
                 <form onSubmit={handleHealthSubmit} className="grid gap-3 sm:grid-cols-2">
                   <Field label="Tanggal">
-                    <Input type="date" className="rounded-[8px]" value={healthForm.date} onChange={(event) => setHealthForm((current) => ({ ...current, date: event.target.value }))} />
+                    <Input
+                      type="date"
+                      className="rounded-[8px]"
+                      value={healthForm.date}
+                      onChange={(event) => {
+                        const nextDate = event.target.value;
+                        setHealthForm((current) => ({ ...current, date: nextDate }));
+                        setDashboardDate(nextDate || today);
+                      }}
+                    />
                   </Field>
                   <Field label="Kandang">
                     {renderFlockSelect(healthForm.flockId, (value) => setHealthForm((current) => ({ ...current, flockId: value })))}
@@ -2449,7 +2973,16 @@ const Index = () => {
                     </div>
                   ) : null}
                   <Field label="Tanggal">
-                    <Input type="date" className="rounded-[8px]" value={financeForm.date} onChange={(event) => setFinanceForm((current) => ({ ...current, date: event.target.value }))} />
+                    <Input
+                      type="date"
+                      className="rounded-[8px]"
+                      value={financeForm.date}
+                      onChange={(event) => {
+                        const nextDate = event.target.value;
+                        setFinanceForm((current) => ({ ...current, date: nextDate }));
+                        setDashboardDate(nextDate || today);
+                      }}
+                    />
                   </Field>
                   <Field label="Tipe">
                     <Select value={financeForm.type} onValueChange={(value: FinanceType) => setFinanceForm((current) => ({ ...current, type: value }))}>
@@ -2527,7 +3060,7 @@ const Index = () => {
                     </p>
                   </div>
                 </div>
-                <div className="mt-4 grid gap-3">
+                <div className="mt-4 max-h-[520px] space-y-3 overflow-y-auto pr-1">
                   {financeRecords.map((record) => (
                     <div key={record.id} className="rounded-[8px] border border-zinc-200 p-3 text-sm sm:p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">

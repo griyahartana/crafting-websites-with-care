@@ -14,6 +14,7 @@ export type CloudFarmState<T> = {
 export const loadAdminFarmState = async <T>() => {
   const response = await fetch(`${API_ORIGIN}/api/admin-state`, {
     headers: getAdminAuthHeaders(),
+    cache: "no-store",
   });
   if (!response.ok) throw new Error("Gagal mengambil data cloud.");
   return (await response.json()) as CloudFarmState<T>;
@@ -27,6 +28,7 @@ export const saveAdminFarmState = async <T>(state: T) => {
       ...getAdminAuthHeaders(),
     },
     body: JSON.stringify({ state }),
+    cache: "no-store",
   });
   if (!response.ok) throw new Error("Gagal menyimpan data cloud.");
   return (await response.json()) as CloudFarmState<T>;

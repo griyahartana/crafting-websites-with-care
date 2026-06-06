@@ -24,9 +24,13 @@ export const InstallPrompt = () => {
   useEffect(() => {
     const ua = window.navigator.userAgent;
     const ios = /iPad|iPhone|iPod/.test(ua) && !(window as IOSWindow).MSStream;
+    const mobileViewport = window.matchMedia("(max-width: 767px)").matches;
+    const mobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const shouldShowOnDevice = mobileViewport || mobileDevice;
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as IOSNavigator).standalone === true;
+    if (!shouldShowOnDevice) return;
     if (standalone) return;
     if (sessionStorage.getItem("layerfarm_install_dismissed")) return;
 
@@ -66,7 +70,7 @@ export const InstallPrompt = () => {
   if (!show) return null;
 
   return (
-    <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md animate-fade-up md:bottom-4">
+    <div className="fixed bottom-24 left-4 right-4 z-50 mx-auto max-w-md animate-fade-up md:hidden">
       <div className="rounded-2xl bg-card shadow-soft border border-border p-4 flex items-start gap-3">
         <BrandLogo className="h-11 w-11 rounded-xl" />
         <div className="flex-1 min-w-0">

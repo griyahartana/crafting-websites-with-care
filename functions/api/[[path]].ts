@@ -12,6 +12,7 @@ const json = (body: unknown, init: ResponseInit = {}) =>
     ...init,
     headers: {
       "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
       ...init.headers,
     },
   });
