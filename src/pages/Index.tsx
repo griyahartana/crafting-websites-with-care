@@ -329,6 +329,32 @@ const formatDate = (isoDate: string) => dateFormatter.format(parseDate(isoDate))
 const formatShortDate = (isoDate: string) => shortDateFormatter.format(parseDate(isoDate));
 const formatMonth = (monthKey: string) => monthFormatter.format(parseDate(`${monthKey}-01`));
 const formatDayTick = (value: string | number) => String(value).slice(0, 2);
+const buildDashboardAxisTicks = (isoDates: string[]) => {
+  const ticks = isoDates.reduce<string[]>((labels, date, index) => {
+    const dayOfMonth = Number(date.slice(-2));
+    const shouldShowTick = index === 0 || dayOfMonth % 5 === 0 || index === isoDates.length - 1;
+
+    if (shouldShowTick) {
+      const label = formatShortDate(date);
+      if (labels[labels.length - 1] !== label) {
+        labels.push(label);
+      }
+    }
+
+    return labels;
+  }, []);
+
+  if (ticks.length > 2) {
+    const lastDay = Number(ticks[ticks.length - 1].slice(0, 2));
+    const previousDay = Number(ticks[ticks.length - 2].slice(0, 2));
+
+    if (lastDay - previousDay < 3) {
+      ticks.splice(ticks.length - 2, 1);
+    }
+  }
+
+  return ticks;
+};
 const formatNumber = (value: number) => numberFormatter.format(Math.round(value));
 const formatCompact = (value: number) => compactFormatter.format(value);
 const formatCurrency = (value: number) => currencyFormatter.format(value);
@@ -937,6 +963,7 @@ const Index = () => {
     () => buildDateRange(firstDayOfMonth(dashboardEndDate), dashboardEndDate),
     [dashboardEndDate],
   );
+  const dashboardAxisTicks = useMemo(() => buildDashboardAxisTicks(dashboardDates), [dashboardDates]);
   const dashboardRangeLabel = `${formatShortDate(dashboardDates[0])} - ${formatShortDate(dashboardEndDate)}`;
   const dashboardDateLabel = dashboardEndDate === today ? "hari ini" : formatShortDate(dashboardEndDate);
   const dashboardMonthLabel = formatMonth(dashboardMonthKey);
@@ -2296,9 +2323,18 @@ const Index = () => {
                 }
               >
                 <ChartContainer config={productionChartConfig} className="h-[300px] w-full aspect-auto">
-                  <AreaChart data={productionChartData} margin={{ left: 8, right: 8, top: 12, bottom: 0 }}>
+                  <AreaChart data={productionChartData} margin={{ left: 8, right: 8, top: 12, bottom: 8 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      fontSize={11}
+                      minTickGap={12}
+                      ticks={dashboardAxisTicks}
+                      tickFormatter={formatDayTick}
+                    />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={48} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area
@@ -2380,9 +2416,18 @@ const Index = () => {
                 }
               >
                 <ChartContainer config={feedChartConfig} className="h-[260px] w-full overflow-hidden aspect-auto">
-                  <ComposedChart data={feedAndMortalityData} margin={{ left: 4, right: 18, top: 12, bottom: 4 }}>
+                  <ComposedChart data={feedAndMortalityData} margin={{ left: 4, right: 18, top: 12, bottom: 8 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      fontSize={11}
+                      minTickGap={12}
+                      ticks={dashboardAxisTicks}
+                      tickFormatter={formatDayTick}
+                    />
                     <YAxis yAxisId="left" tickLine={false} axisLine={false} tickMargin={6} width={38} fontSize={12} />
                     <YAxis
                       yAxisId="right"
@@ -2410,9 +2455,18 @@ const Index = () => {
                 }
               >
                 <ChartContainer config={financeChartConfig} className="h-[260px] w-full aspect-auto">
-                  <AreaChart data={financeChartData} margin={{ left: 0, right: 8, top: 12, bottom: 0 }}>
+                  <AreaChart data={financeChartData} margin={{ left: 0, right: 8, top: 12, bottom: 8 }}>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} fontSize={11} interval={0} minTickGap={0} tickFormatter={formatDayTick} />
+                    <XAxis
+                      dataKey="date"
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={8}
+                      fontSize={11}
+                      minTickGap={12}
+                      ticks={dashboardAxisTicks}
+                      tickFormatter={formatDayTick}
+                    />
                     <YAxis tickLine={false} axisLine={false} tickMargin={8} width={58} tickFormatter={(value) => formatCompact(Number(value))} />
                     <ChartTooltip content={<ChartTooltipContent />} />
                     <Area dataKey="pendapatan" type="monotone" fill="var(--color-pendapatan)" fillOpacity={0.14} stroke="var(--color-pendapatan)" strokeWidth={2} />
